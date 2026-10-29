@@ -124,7 +124,10 @@ class TransferQueue(
  * Receives one song at a time into a [StreamCache]: its cover first, then the audio, keeping up to
  * [Transfers.WINDOWS] requests in flight. Not thread-safe: use from one coroutine or under a lock.
  */
-class TrackReceiver(private val cache: StreamCache) {
+class TrackReceiver(
+    private val cache: StreamCache,
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
+) {
 
     sealed interface Event {
         /** The size is known and the first bytes are in: the song can start playing already. */
@@ -143,6 +146,9 @@ class TrackReceiver(private val cache: StreamCache) {
     /** Where a gap was last detected, so it is asked for again only once. */
     private var recoveringFrom = -1L
 
+    /** When the last request went out or the last useful bytes came in. */
+    private var lastActivity = 0L
+
     /** Switches to receiving [ref] (null = nothing); what already arrived of a song is kept. */
     fun receive(ref: TrackRef?) {
         if (ref == target) return
@@ -156,7 +162,20 @@ class TrackReceiver(private val cache: StreamCache) {
         artRequested = false
     }
 
-    suspend fun pump(send: suspend (Message) -> Unit) {
+    /**
+     * True when requests are out but nothing useful arrived for [timeoutMs]: an answer was lost on
+     * the way (a dropped relay frame, a request the sender never saw). The requests are forgotten,
+     * so the next [pump] asks again from what arrived instead of waiting forever.
+     */
+    fun stalled(timeoutMs: Long): Boolean {
+        if (target == null || pendingEnds.isEmpty() || clock() - lastActivity < timeoutMs) return false
+        pendingEnds.clear()
+        recoveringFrom = -1
+        return true
+    }
+
+    /** Keeps requests in flight for the target; [allow] is asked before each one (pacing). */
+    suspend fun pump(send: suspend (Message) -> Unit, allow: () -> Boolean = { true }) {
         val ref = target ?: return
         // The cover comes after the first audio, which is what lets the song start.
         if (total > 0 && !artRequested && !cache.hasArt(ref)) {
@@ -166,7 +185,8 @@ class TrackReceiver(private val cache: StreamCache) {
         var next = pendingEnds.lastOrNull() ?: cache.receivedBytes(ref)
         // Until the size is known, one request at a time.
         val limit = if (total < 0) 1 else Transfers.WINDOWS
-        while (pendingEnds.size < limit && (total < 0 || next < total)) {
+        while (pendingEnds.size < limit && (total < 0 || next < total) && allow()) {
+            if (pendingEnds.isEmpty()) lastActivity = clock()
             send(Message.Fetch(ref, next, Transfers.WINDOW_BYTES))
             next += Transfers.WINDOW_BYTES
             pendingEnds.addLast(next)
@@ -194,12 +214,20 @@ class TrackReceiver(private val cache: StreamCache) {
             // Bytes from beyond what arrived (answered out of order, or lost on a reconnect): they
             // can't be kept, so ask again from the gap instead of waiting forever for it.
             val received = cache.receivedBytes(ref)
-            if (chunk.offset <= received || received == recoveringFrom) return null
+            if (chunk.offset <= received) {
+                // Bytes that already arrived (answers to an earlier request for the same range). The
+                // requests they satisfy are done; without this, the window would stay "full" of
+                // requests nobody is going to answer any more.
+                if (total > 0) while (pendingEnds.isNotEmpty() && received >= minOf(pendingEnds.first(), total)) pendingEnds.removeFirst()
+                return if (pendingEnds.isEmpty() && total > 0) Event.Progress(ref, received.toFloat() / total) else null
+            }
+            if (received == recoveringFrom) return null
             recoveringFrom = received
             pendingEnds.clear()
             return Event.Progress(ref, received.toFloat() / total)
         }
         val received = cache.receivedBytes(ref)
+        lastActivity = clock()
         while (pendingEnds.isNotEmpty() && received >= minOf(pendingEnds.first(), total)) pendingEnds.removeFirst()
         if (received < total) {
             return if (first) Event.Started(ref, cache.playable(ref) ?: return null) else Event.Progress(ref, received.toFloat() / total)
@@ -223,5 +251,21 @@ class TrackReceiver(private val cache: StreamCache) {
         pendingEnds.clear()
         artRequested = false
         recoveringFrom = -1
+    }
+}
+
+/** Token bucket of bytes: [take] says whether [bytes] may go now, at [perSecond] with bursts of [burst]. */
+class BytePacer(private val perSecond: Long, private val burst: Long, private val clock: () -> Long) {
+    private var tokens = burst.toDouble()
+    private var at = clock()
+
+    @Synchronized
+    fun take(bytes: Long): Boolean {
+        val now = clock()
+        tokens = minOf(burst.toDouble(), tokens + (now - at).coerceAtLeast(0) * perSecond / 1000.0)
+        at = now
+        if (tokens < bytes) return false
+        tokens -= bytes
+        return true
     }
 }

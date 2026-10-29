@@ -58,7 +58,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "AURA"
-            packageVersion = "0.9.0"
+            packageVersion = "0.9.1"
             description = "AURA — player de música"
             vendor = "AURA"
             modules("java.desktop", "java.logging", "jdk.unsupported", "jdk.crypto.ec", "java.naming")

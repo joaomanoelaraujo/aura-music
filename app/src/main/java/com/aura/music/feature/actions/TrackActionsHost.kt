@@ -104,6 +104,13 @@ private fun TrackActionsSheet(
     val navigator = LocalNavigator.current
     val playerSheet = LocalPlayerSheet.current
     val resources = LocalResources.current
+    val delete = rememberDeleteTrack { deleted, ok ->
+        if (ok) {
+            viewModel.forgetDeleted(deleted)
+            messenger.show(resources.getString(R.string.msg_deleted, deleted.title))
+        }
+        onDismiss()
+    }
 
     AuraSheet(onDismiss) {
         SheetHeader(
@@ -188,6 +195,7 @@ private fun TrackActionsSheet(
                 messenger.show(resources.getString(R.string.msg_hidden))
                 onDismiss()
             })
+            SheetAction(AuraIcons.Trash, stringResource(R.string.action_delete_file), onClick = { delete(track) }, tint = AuraTheme.colors.danger)
         }
         state.extras.forEach { extra ->
             SheetAction(extra.icon, extra.label, onClick = {

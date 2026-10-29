@@ -70,6 +70,8 @@ data class AppSettings(
     val minTrackDurationSec: Int = 0,
     val excludedFolders: Set<String> = emptySet(),
     val hideWhatsApp: Boolean = false,
+    /** Hide files whose title is just a date, a time or hashtags (saved statuses and clips). */
+    val hideTimestampTitles: Boolean = false,
     val showUntagged: Boolean = true,
     val lyricsFolders: Set<String> = emptySet(),
     /** Look for lyrics on the internet (LRCLIB) when a song has none, and keep them for offline use. */
@@ -156,6 +158,7 @@ class SettingsRepository @Inject constructor(
         prefs[Keys.EXCLUDED_FOLDERS] = if (excluded) current + path else current - path
     }
     suspend fun setHideWhatsApp(value: Boolean) = store.edit { it[Keys.HIDE_WHATSAPP] = value }
+    suspend fun setHideTimestampTitles(value: Boolean) = store.edit { it[Keys.HIDE_TIMESTAMP_TITLES] = value }
     suspend fun setShowUntagged(value: Boolean) = store.edit { it[Keys.SHOW_UNTAGGED] = value }
     suspend fun addLyricsFolder(uri: String) = store.edit { it[Keys.LYRICS_FOLDERS] = it[Keys.LYRICS_FOLDERS].orEmpty() + uri }
     suspend fun removeLyricsFolder(uri: String) = store.edit { it[Keys.LYRICS_FOLDERS] = it[Keys.LYRICS_FOLDERS].orEmpty() - uri }
@@ -220,6 +223,7 @@ class SettingsRepository @Inject constructor(
             minTrackDurationSec = this[Keys.MIN_DURATION] ?: d.minTrackDurationSec,
             excludedFolders = this[Keys.EXCLUDED_FOLDERS] ?: d.excludedFolders,
             hideWhatsApp = this[Keys.HIDE_WHATSAPP] ?: d.hideWhatsApp,
+            hideTimestampTitles = this[Keys.HIDE_TIMESTAMP_TITLES] ?: d.hideTimestampTitles,
             showUntagged = this[Keys.SHOW_UNTAGGED] ?: d.showUntagged,
             lyricsFolders = this[Keys.LYRICS_FOLDERS] ?: d.lyricsFolders,
             onlineLyrics = this[Keys.ONLINE_LYRICS] ?: d.onlineLyrics,
@@ -271,6 +275,7 @@ class SettingsRepository @Inject constructor(
         val MIN_DURATION = intPreferencesKey("min_track_duration_sec")
         val EXCLUDED_FOLDERS = stringSetPreferencesKey("excluded_folders")
         val HIDE_WHATSAPP = booleanPreferencesKey("hide_whatsapp")
+        val HIDE_TIMESTAMP_TITLES = booleanPreferencesKey("hide_timestamp_titles")
         val SHOW_UNTAGGED = booleanPreferencesKey("show_untagged")
         val LYRICS_FOLDERS = stringSetPreferencesKey("lyrics_folders")
         val ONLINE_LYRICS = booleanPreferencesKey("online_lyrics")

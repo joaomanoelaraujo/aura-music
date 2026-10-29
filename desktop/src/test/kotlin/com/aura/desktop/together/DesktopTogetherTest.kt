@@ -173,7 +173,19 @@ class DesktopTogetherTest {
         }
         override suspend fun has(ref: TrackRef) = true
         override suspend fun addReceived(ref: TrackRef, file: File, placement: Placement) = Unit
-        override suspend fun open(ref: TrackRef): TrackFile? = null
+
+        /** Songs this phone can send, by ref (only those in its queue, like the real adapters). */
+        val files = HashMap<TrackRef, File>()
+        override suspend fun open(ref: TrackRef): TrackFile? = files[ref]?.takeIf { ref in queue }?.let { f ->
+            TrackFile(f.length()) { offset, length ->
+                java.io.RandomAccessFile(f, "r").use { raf ->
+                    raf.seek(offset)
+                    val buffer = ByteArray(minOf(length.toLong(), f.length() - offset).toInt().coerceAtLeast(0))
+                    raf.readFully(buffer)
+                    buffer
+                }
+            }
+        }
         override suspend fun artwork(ref: TrackRef): ByteArray? = null
     }
 
@@ -212,5 +224,52 @@ class DesktopTogetherTest {
         onMain { together.leave() }
         assertEquals(JamRole.Idle, together.role.value)
         assertEquals(null, player.redirect)
+    }
+
+    /** A silent stereo WAV of [seconds] (44.1 kHz, 16 bits): ~176 KB per second, several windows long. */
+    private fun silentWav(name: String, seconds: Int): File {
+        val pcm = 44_100 * 4 * seconds
+        val header = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(36 + pcm); put("WAVE".toByteArray())
+            put("fmt ".toByteArray()); putInt(16); putShort(1); putShort(2); putInt(44_100); putInt(44_100 * 4); putShort(4); putShort(16)
+            put("data".toByteArray()); putInt(pcm)
+        }.array()
+        return File(temp.newFolder(), name).apply { writeBytes(header + ByteArray(pcm)) }
+    }
+
+    @Test
+    fun theComputerReceivesSongAfterSongItDoesntHave() {
+        setUp()
+        // Several songs in a row that only the phone has, each a few transfer windows long: the
+        // computer must receive and play every one of them, not just the first.
+        val songs = (1..4).map { i ->
+            val file = silentWav("so_no_celular_$i.wav", 3)
+            TrackRef("Só no celular $i", "Alguém", null, 3_000, file.length()) to file
+        }
+        val phone = FakePhone(songs.map { it.first })
+        songs.forEach { (ref, file) -> phone.files[ref] = file }
+        val key = SecureChannel.newKey()
+        val host = HostSession(
+            HostConfig("phone_jam_2", key, "Jam do celular", "Celular", requireApproval = false, port = 0, inviteId = "inv_phone2"),
+            phone, { System.nanoTime() / 1_000_000 }, { true },
+        )
+        val port = host.start()
+        cleanups += { host.stop() }
+        val link = Invite("phone_jam_2", "127.0.0.1", port, key, "Celular", "Jam do celular", inviteId = "inv_phone2")
+            .toLink("https://aura-convites.johnmanoelaraujo.workers.dev/aura/j/")
+
+        onMain { assertTrue(together.join(link, "PC", receiveMissing = true)) }
+        waitFor(what = "joined") { (together.role.value as? JamRole.Guest)?.ui?.status == GuestStatus.Connected }
+        songs.forEachIndexed { i, (ref, _) ->
+            if (i > 0) {
+                phone.index = i
+                phone.changesFlow.value++
+            }
+            waitFor(what = "song ${i + 1} received and playing") {
+                val guest = together.role.value as JamRole.Guest
+                player.state.value.current?.title == ref.title && player.state.value.isPlaying && !guest.ui.missingTrack
+            }
+        }
+        onMain { together.leave() }
     }
 }

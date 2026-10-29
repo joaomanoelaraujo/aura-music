@@ -154,6 +154,24 @@ identidade, aparelho falso respondendo, replay/reordem/adulteração, duplicatas
   por seek (limite 150 ms, intervalo mínimo 3 s): o Java Sound não permite ajustar a velocidade sem
   reamostrar.
 - Enquanto está numa jam, os comandos locais do player viram pedidos ao anfitrião (`redirect`).
+- **Correções de 29/10 (0.9.1), depois de relatos de uso real** — “depois de algumas músicas, uma
+  não toca no convidado”:
+  - PC convidado: ao receber uma música que não tinha, esperava o arquivo inteiro *dentro* do laço
+    que recebe esse mesmo arquivo — travava para sempre. Agora responde “ainda não” e toca quando a
+    cópia termina (o decodificador do PC precisa do arquivo completo). Receber as músicas que
+    faltam vem ligado ao entrar numa jam.
+  - Pedido perdido (quadro descartado pelo relay, pedido que o anfitrião não viu) deixava o
+    convidado esperando para sempre: um vigia pede de novo após 8 s sem progresso.
+  - Respostas repetidas (o anfitrião pulou e voltou de música) podiam encher a janela de pedidos
+    que ninguém mais responderia; agora contam como atendidos.
+  - “Indisponível” era permanente para aquela música; agora é tentado de novo após 15 s.
+  - Pelo relay, o convidado pede músicas num ritmo de ~19 MiB/min: o relay derruba a sala que passa
+    de 48 MiB/min (um FLAC atual + o próximo passavam disso).
+  - Um convidado cuja música terminou um instante antes da do anfitrião mandava “pausar” para a
+    jam inteira; o fim da música não conta mais como pausa.
+  - Testes: `TrackReceiverTest` (resposta perdida, respostas repetidas, ritmo) e
+    `theComputerReceivesSongAfterSongItDoesntHave` (4 músicas seguidas que só o celular tem; falha
+    com o código antigo, passa com o novo).
 
 ## 3f. Streaming autorizado (Fase 8) — avaliação e decisão
 
@@ -181,7 +199,7 @@ Revisitar WebRTC só se o custo de banda do relay se tornar um problema medido.
 - Teclas de mídia do teclado funcionam com a janela sem foco (`RegisterHotKey`; teclas que outro
   app já reservou são ignoradas). Ícone na área de notificação com tocar/pausar, próxima, anterior.
   Barra de título escura (`DwmSetWindowAttribute`).
-- MSI por usuário (`AURA-0.9.0.msi`, ~105 MB, Java 21 embutido), sem pedir administrador.
+- MSI por usuário (`AURA-0.9.1.msi`, ~105 MB, Java 21 embutido), sem pedir administrador.
 
 ## 4. Riscos técnicos e limitações conhecidas
 
@@ -207,12 +225,12 @@ Máquina Windows 11, JDK 21. **Testes com Android foram feitos no emulador (`nex
 celular físico.** O teste em aparelho físico continua pendente.
 
 Testes automáticos (última execução, 29/10/2026):
-- `:core:test` — 123 testes, 3 ignorados, 0 falhas (AURA Link: SPAKE2, impostor, replay,
+- `:core:test` — 126 testes, 3 ignorados, 0 falhas (AURA Link: SPAKE2, impostor, replay,
   adulteração; transferências; Discover; Together com as correções de segurança).
-- `:desktop:test` — 61 testes, 0 falhas (áudio real decodificado, biblioteca, fila, dados do
+- `:desktop:test` — 62 testes, 0 falhas (áudio real decodificado, biblioteca, fila, dados do
   usuário, letras, AURA Link contra um celular simulado, transferências, downloads, Together
   Desktop↔Desktop, 18 telas renderizadas).
-- `:app:testDebugUnitTest` — 89 testes, 1 ignorado, 0 falhas (os testes do Together foram para `:core`).
+- `:app:testDebugUnitTest` — 91 testes, 1 ignorado, 0 falhas (os testes do Together foram para `:core`).
 - `:app:assembleStaging` gerado.
 
 Ponta a ponta com o emulador Android (harness `LinkHarness` no Desktop):
@@ -235,6 +253,10 @@ Pacote:
 APK de release (R8 ligado, assinado com a chave de release), no emulador: primeira abertura pede
 consentimento para letras/capas online (“Agora não” não pergunta de novo); vínculo por código com
 o PC (SPAKE2 e confirmação), estado do celular chegando ao PC e o celular pausando o PC.
+
+Android, 29/10 (emulador, build de debug): opção “Ocultar áudios com data, hora ou hashtag no
+nome” escondeu “#fry #algo”, “08. 19. 12” e “21h33 #whatsappstatus” e manteve “Gravacao de teste”
+(10 → 7 faixas); “Excluir do aparelho” mostrou a confirmação do Android e apagou o arquivo (7 → 6).
 
 **Não testado:** celular físico; som audível com alguém ouvindo; teclas de mídia num teclado real
 (registro feito, tecla não pressionada); bibliotecas grandes; DPI diferente de 100 %; outros

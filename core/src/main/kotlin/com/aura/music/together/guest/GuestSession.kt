@@ -15,7 +15,9 @@ import com.aura.music.together.sync.DriftStats
 import com.aura.music.together.transfer.SongSource
 import com.aura.music.together.transfer.StreamCache
 import com.aura.music.together.transfer.TrackReceiver
+import com.aura.music.together.transfer.BytePacer
 import com.aura.music.together.transfer.TransferQueue
+import com.aura.music.together.transfer.Transfers
 import com.aura.music.together.transport.Connection
 import com.aura.music.together.transport.RelayEndpoint
 import com.aura.music.together.transport.SecureLink
@@ -122,12 +124,25 @@ class GuestSession(
     private var justSeeked = false
     private var lastConnectedAt = 0L
 
-    // Receiving a missing song; only touched from the connection's receive loop.
-    private val receiver = cache?.let(::TrackReceiver)
+    // Receiving a missing song: the receive loop and the watchdog take turns under [receiverLock].
+    private val receiver = cache?.let { TrackReceiver(it, clock) }
+    private val receiverLock = Mutex()
 
     /** The current song, when it plays from a copy that is still arriving. */
     private var streaming: TrackRef? = null
-    private val unavailable = HashSet<TrackRef>()
+
+    /**
+     * Songs the host said it couldn't send, and when. Asked again after [UNAVAILABLE_RETRY_MS]: the
+     * answer can be temporary (the song left the host's queue for a moment, a file was busy).
+     */
+    private val unavailable = ConcurrentHashMap<TrackRef, Long>()
+
+    /**
+     * Over the internet relay, songs are requested at a steady pace: the relay limits how much a
+     * room may carry per minute and drops the connections of a room that goes over it.
+     */
+    private val relayPacer = BytePacer(RELAY_BYTES_PER_SECOND, RELAY_BURST_BYTES, clock)
+    @Volatile private var overRelay = false
 
     /** Songs this guest added to the queue: the only ones the host may fetch from it. */
     private val offered = ConcurrentHashMap.newKeySet<TrackRef>()
@@ -208,9 +223,12 @@ class GuestSession(
 
     /** One connection lifetime; returns or throws when it ends. */
     private suspend fun session() = withContext(Dispatchers.IO) {
-        val l = SecureLink.open(connect(), channel, asHost = false)
+        val opened = connect()
+        overRelay = opened is WsConnection
+        val l = SecureLink.open(opened, channel, asHost = false)
         link = l
         var pinger: Job? = null
+        var watchdog: Job? = null
         // One upload to the host at a time, in order, beside the message loop so state keeps flowing.
         val uploads = TransferQueue(
             scope,
@@ -221,6 +239,7 @@ class GuestSession(
         try {
             l.send(Message.Hello(Wire.PROTOCOL, name, participantId, resumeToken, invite.inviteId))
             pinger = scope.launch { pingLoop(l) }
+            watchdog = receiver?.let { scope.launch { downloadWatchdog(l) } }
             while (isActive) {
                 when (val m = l.receive()) {
                     Message.WaitingApproval -> _ui.update { it.copy(status = GuestStatus.WaitingApproval) }
@@ -230,20 +249,22 @@ class GuestSession(
                         lastConnectedAt = clock()
                         _ui.update { it.copy(status = GuestStatus.Connected, participantId = m.participantId) }
                         // Requests sent on a previous connection are lost: ask again from what arrived.
-                        receiver?.connectionLost()
+                        receiverLock.withLock { receiver?.connectionLost() }
                         onState(m.state)
-                        pumpDownload(l)
+                        receiverLock.withLock { pumpDownload(l) }
                     }
                     is Message.State -> {
                         onState(m.state)
-                        pumpDownload(l)
+                        receiverLock.withLock { pumpDownload(l) }
                     }
-                    is Message.Chunk -> onChunk(m, l)
-                    is Message.Art -> receiver?.onArt(m)
-                    is Message.Unavailable -> if (receiver?.onUnavailable(m) == true) {
-                        unavailable += m.track
-                        if (m.track == _ui.value.state?.current) _ui.update { it.copy(receiving = null, streamFailed = true) }
-                        pumpDownload(l)
+                    is Message.Chunk -> receiverLock.withLock { onChunk(m, l) }
+                    is Message.Art -> receiverLock.withLock { receiver?.onArt(m) }
+                    is Message.Unavailable -> receiverLock.withLock {
+                        if (receiver?.onUnavailable(m) == true) {
+                            unavailable[m.track] = clock()
+                            if (m.track == _ui.value.state?.current) _ui.update { it.copy(receiving = null, streamFailed = true) }
+                            pumpDownload(l)
+                        }
                     }
                     is Message.Fetch, is Message.FetchArt -> uploads.offer(m)
                     is Message.Reaction -> _reactions.tryEmit(m)
@@ -262,6 +283,7 @@ class GuestSession(
         } finally {
             uploads.close()
             pinger?.cancel()
+            watchdog?.cancel()
             link = null
             l.connection.close()
         }
@@ -276,12 +298,33 @@ class GuestSession(
         val receiver = receiver ?: return
         val state = _ui.value.state ?: return
         val current = state.current
+        val now = clock()
+        unavailable.entries.removeIf { now - it.value > UNAVAILABLE_RETRY_MS }
         val wanted = listOfNotNull(current, state.queue.getOrNull(state.index + 1)).firstOrNull { ref ->
-            ref !in unavailable && cache.complete(ref) == null &&
+            !unavailable.containsKey(ref) && cache.complete(ref) == null &&
                 if (ref == current) _ui.value.missingTrack || streaming == ref else !player.has(ref)
         }
         receiver.receive(wanted)
-        receiver.pump(l::send)
+        pump(receiver, l)
+    }
+
+    private suspend fun pump(receiver: TrackReceiver, l: SecureLink) =
+        receiver.pump(l::send) { !overRelay || relayPacer.take(Transfers.WINDOW_BYTES.toLong()) }
+
+    /**
+     * Keeps a download moving: asks again when an answer got lost, follows the relay pace, and
+     * retries songs the host couldn't send a moment ago.
+     */
+    private suspend fun downloadWatchdog(l: SecureLink) {
+        while (scope.isActive) {
+            delay(WATCHDOG_INTERVAL_MS)
+            if (_ui.value.status != GuestStatus.Connected) continue
+            receiverLock.withLock {
+                val r = receiver ?: return@withLock
+                if (r.stalled(STALL_TIMEOUT_MS)) log?.invoke("download stalled: asking again")
+                runCatching { pumpDownload(l) }
+            }
+        }
     }
 
     private suspend fun onChunk(chunk: Message.Chunk, l: SecureLink) {
@@ -290,11 +333,11 @@ class GuestSession(
             is TrackReceiver.Event.Started -> {
                 // Play from the first chunk on: the rest keeps arriving while it plays.
                 if (isCurrent && _ui.value.missingTrack) playReceived(event.ref, event.file)
-                receiver.pump(l::send)
+                pump(receiver, l)
             }
             is TrackReceiver.Event.Progress -> {
                 if (isCurrent && _ui.value.missingTrack) _ui.update { it.copy(receiving = event.fraction) }
-                receiver.pump(l::send)
+                pump(receiver, l)
             }
             is TrackReceiver.Event.Complete -> {
                 if (streaming == event.ref) streaming = null
@@ -302,7 +345,7 @@ class GuestSession(
                 pumpDownload(l)
             }
             is TrackReceiver.Event.Failed -> {
-                unavailable += event.ref
+                unavailable[event.ref] = clock()
                 pumpDownload(l)
             }
         }
@@ -316,7 +359,8 @@ class GuestSession(
         stats.reset()
         appliedPlaying = state.isPlaying && ok
         if (ok && cache?.complete(ref) == null) streaming = ref
-        _ui.update { it.copy(missingTrack = !ok, receiving = null) }
+        // A player that can't open a copy still arriving says no for now; it's tried again when complete.
+        _ui.update { it.copy(missingTrack = !ok, receiving = if (ok) null else it.receiving) }
     }
 
     private suspend fun pingLoop(l: SecureLink) {
@@ -348,7 +392,7 @@ class GuestSession(
             loaded = ref
             loadedIndex = state.index
             appliedPlaying = state.isPlaying && ok
-            _ui.update { it.copy(missingTrack = !ok, streamFailed = !ok && ref in unavailable, receiving = null) }
+            _ui.update { it.copy(missingTrack = !ok, streamFailed = !ok && unavailable.containsKey(ref), receiving = null) }
         } else if (appliedPlaying != state.isPlaying && !_ui.value.missingTrack) {
             player.setPlaying(state.isPlaying)
             appliedPlaying = state.isPlaying
@@ -367,7 +411,10 @@ class GuestSession(
             // Play/pause from this device's notification or headset: ask the host instead of diverging.
             val localPlaying = player.isPlaying()
             val applied = appliedPlaying
-            if (applied != null && localPlaying != applied) {
+            // A song ending here a moment before the host's isn't a "pause": the host moves on.
+            val duration = state.current?.durationMs ?: 0
+            val endedHere = !localPlaying && duration > 0 && local >= duration - END_MARGIN_MS
+            if (applied != null && localPlaying != applied && !endedHere) {
                 appliedPlaying = localPlaying
                 send(if (localPlaying) Command.Play else Command.Pause)
                 continue
@@ -432,6 +479,14 @@ class GuestSession(
         const val SYNC_INTERVAL_MS = 500L
         const val INITIAL_SEEK_LEAD_MS = 80L
         const val MAX_SEEK_LEAD_MS = 1_000L
+        const val END_MARGIN_MS = 2_000L
+        const val WATCHDOG_INTERVAL_MS = 500L
+        const val STALL_TIMEOUT_MS = 8_000L
+        const val UNAVAILABLE_RETRY_MS = 15_000L
+
+        /** ~19 MiB a minute per guest: under the relay's 48 MiB per room with two guests receiving. */
+        const val RELAY_BYTES_PER_SECOND = 320L * 1024
+        const val RELAY_BURST_BYTES = 1024L * 1024
     }
 }
 

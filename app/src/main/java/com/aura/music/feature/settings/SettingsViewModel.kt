@@ -159,6 +159,7 @@ class SettingsViewModel @Inject constructor(
     // Library
     fun setMinTrackDuration(seconds: Int) = launch { repository.setMinTrackDuration(seconds) }
     fun setHideWhatsApp(value: Boolean) = launch { repository.setHideWhatsApp(value) }
+    fun setHideTimestampTitles(value: Boolean) = launch { repository.setHideTimestampTitles(value) }
     fun setOnlineLyrics(value: Boolean) = launch { repository.setOnlineLyrics(value) }
     fun setLyricsEffects(value: Boolean) = launch { repository.setLyricsEffects(value) }
     fun setOnlineCovers(value: Boolean) = launch { repository.setOnlineCovers(value) }

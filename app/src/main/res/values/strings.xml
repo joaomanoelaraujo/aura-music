@@ -304,7 +304,12 @@
     <string name="action_mark_music">Marcar como música</string>
     <string name="action_mark_audio">Mover para Áudios</string>
     <string name="action_reclassify">Corrigir classificação</string>
-    <string name="action_hide_file">Ocultar arquivo</string>
+    <string name="action_hide_file">Ocultar só no AURA</string>
+    <string name="action_delete_file">Excluir do aparelho</string>
+    <string name="delete_title">Excluir “%1$s”?</string>
+    <string name="delete_body">O arquivo será apagado deste aparelho, para todos os apps. Para só tirar do AURA, use “Ocultar só no AURA”.</string>
+    <string name="delete_confirm">Excluir</string>
+    <string name="msg_deleted">“%1$s” foi excluída do aparelho</string>
     <string name="action_folder_as_music">Tratar esta pasta como música</string>
     <string name="action_reset_classification">Voltar à classificação automática</string>
     <string name="reclassify_title">Classificar como</string>
@@ -551,6 +556,8 @@
     <string name="settings_min_duration_body">Áudios menores que o limite não aparecem em lugar nenhum.</string>
     <string name="settings_min_duration_value">Menos de %d s</string>
     <string name="settings_smart_library">Smart Library</string>
+    <string name="settings_hide_timestamp_titles">Ocultar áudios com data, hora ou hashtag no nome</string>
+    <string name="settings_hide_timestamp_titles_body">Arquivos cujo título é só uma data, um horário ou hashtags, como “08. 19. 12”, “23:21” ou “21:33 #whatsappstatus”, não aparecem. Nada é apagado; desligue para vê-los de novo.</string>
     <string name="settings_hide_whatsapp">Ocultar áudios do WhatsApp</string>
     <string name="settings_hide_whatsapp_body">Mensagens de voz e áudios recebidos não aparecem nem em Áudios. Músicas compartilhadas reconhecidas como música continuam na biblioteca.</string>
     <string name="settings_show_untagged">Mostrar músicas sem metadados</string>

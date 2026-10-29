@@ -21,7 +21,7 @@ Requisitos: JDK 17+, Android SDK com `platforms;android-37` e `build-tools;37.0.
 
 `compileSdk 37` é exigido pelas versões atuais do AndroidX; `targetSdk 36`, `minSdk 29` (Android 10).
 
-## AURA Desktop (0.9.0, Windows)
+## AURA Desktop (0.9.1, Windows)
 
 Versão para computador no módulo `:desktop`, em Compose for Desktop com áudio pelo FFmpeg: player
 offline, letras, playlists, AURA Link (vincular e controlar o celular nos dois sentidos, enviar

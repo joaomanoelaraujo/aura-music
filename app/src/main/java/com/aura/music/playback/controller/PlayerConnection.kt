@@ -308,6 +308,14 @@ class PlayerConnection @Inject constructor(
         command { if (index in 0 until mediaItemCount) removeMediaItem(index) }
     }
 
+    /** Takes every copy of a track whose file was deleted out of the queue (local player only). */
+    fun removeTrack(trackId: Long) {
+        val mediaId = trackId.toString() // same as MediaItemMapper.toMediaItem
+        command {
+            for (i in mediaItemCount - 1 downTo 0) if (getMediaItemAt(i).mediaId == mediaId) removeMediaItem(i)
+        }
+    }
+
     private fun MediaController.startWith(tracks: List<Track>) {
         setMediaItems(tracks.map(MediaItemMapper::toMediaItem))
         prepare()

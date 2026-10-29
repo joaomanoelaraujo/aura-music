@@ -74,11 +74,11 @@ class LibraryRepository @Inject constructor(
         classification.overrides,
         classification.folderRules,
         settingsRepository.settings
-            .map { Triple(it.excludedFolders, it.hideWhatsApp, it.showUntagged) }
+            .map { LibraryRules(excludedFolders = it.excludedFolders, hideWhatsApp = it.hideWhatsApp, hideTimestampTitles = it.hideTimestampTitles, showUntagged = it.showUntagged) }
             .distinctUntilChanged(),
         metadataDao.observeOverrides().map { list -> list.associate { it.trackId to MetadataOverride(it.title, it.artist) } },
-    ) { overrides, folderRules, (excluded, hideWhatsApp, showUntagged), metadata ->
-        LibraryRules(overrides, folderRules, excluded, hideWhatsApp, showUntagged, metadata)
+    ) { overrides, folderRules, fromSettings, metadata ->
+        fromSettings.copy(overrides = overrides, folderRules = folderRules, metadata = metadata)
     }.distinctUntilChanged()
 
     /** Classification is re-applied on every rule change without touching MediaStore again. */

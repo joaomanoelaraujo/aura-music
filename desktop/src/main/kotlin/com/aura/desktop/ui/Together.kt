@@ -81,7 +81,7 @@ private fun IdleJam(model: AppModel, together: DesktopTogether) {
     var democratic by remember { mutableStateOf(true) }
     var approve by remember { mutableStateOf(true) }
     var link by remember { mutableStateOf("") }
-    var receiveMissing by remember { mutableStateOf(false) }
+    var receiveMissing by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     LazyColumn(contentPadding = PaddingValues(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 32.dp), modifier = Modifier.fillMaxSize()) {
         item {

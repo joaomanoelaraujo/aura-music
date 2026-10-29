@@ -461,6 +461,7 @@ private fun LazyListScope.library(state: SettingsUiState, vm: SettingsViewModel)
 
     item { SettingsSection(stringResource(R.string.settings_smart_library)) }
     item { SwitchRow(stringResource(R.string.settings_hide_whatsapp), stringResource(R.string.settings_hide_whatsapp_body), s.hideWhatsApp, vm::setHideWhatsApp) }
+    item { SwitchRow(stringResource(R.string.settings_hide_timestamp_titles), stringResource(R.string.settings_hide_timestamp_titles_body), s.hideTimestampTitles, vm::setHideTimestampTitles) }
     item { SwitchRow(stringResource(R.string.settings_show_untagged), stringResource(R.string.settings_show_untagged_body), s.showUntagged, vm::setShowUntagged) }
     item {
         val navigator = LocalNavigator.current

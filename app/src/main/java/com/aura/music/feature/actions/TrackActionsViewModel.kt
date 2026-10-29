@@ -25,7 +25,14 @@ class TrackActionsViewModel @Inject constructor(
     private val playlists: PlaylistRepository,
     private val classification: ClassificationRepository,
     private val link: com.aura.music.link.LinkController,
+    private val library: com.aura.music.data.repository.LibraryRepository,
 ) : ViewModel() {
+
+    /** The file is gone: take it out of the queue and read the library again. */
+    fun forgetDeleted(track: Track) {
+        player.removeTrack(track.id)
+        library.refresh()
+    }
 
     /** Linked computers connected now that accept files: (deviceId, name). */
     val sendTargets: StateFlow<List<Pair<String, String>>> = link.state

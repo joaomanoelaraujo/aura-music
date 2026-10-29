@@ -1,6 +1,6 @@
 # AURA Desktop
 
-Player de música para computador, da mesma família do AURA para Android. Versão 0.9.0, Windows.
+Player de música para computador, da mesma família do AURA para Android. Versão 0.9.1, Windows.
 Funciona sem conta, sem celular e sem internet: lê as músicas das pastas que você escolher.
 
 Decisões, auditoria e riscos: [ARCHITECTURE.md](ARCHITECTURE.md).

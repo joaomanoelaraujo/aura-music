@@ -280,8 +280,13 @@ class DesktopTogether(
     )
 
     /** The desktop decoder can't read a file that's still growing: wait until it's complete. */
-    private suspend fun awaitComplete(file: File) {
-        while (!GrowingFiles.isComplete(file)) delay(150)
+    /** Waits for a received song to finish arriving; false if it never will (failed, jam ended). */
+    private suspend fun awaitComplete(file: File): Boolean {
+        while (!GrowingFiles.isComplete(file)) {
+            if (!GrowingFiles.isPlayable(file)) return false
+            delay(150)
+        }
+        return true
     }
 
     private inner class HostAdapter : HostPlayer {
@@ -358,8 +363,7 @@ class DesktopTogether(
         override suspend fun addReceived(ref: TrackRef, file: File, placement: Placement) {
             received[file.path] = ref
             scope.launch {
-                awaitComplete(file)
-                withContext(main) { insert(listOf(receivedTrack(ref, file)), placement) }
+                if (awaitComplete(file)) withContext(main) { insert(listOf(receivedTrack(ref, file)), placement) }
             }
         }
     }
@@ -381,7 +385,10 @@ class DesktopTogether(
         }
 
         override suspend fun loadFile(ref: TrackRef, file: File, positionMs: Long, play: Boolean): Boolean {
-            awaitComplete(file)
+            // The desktop decoder needs the whole file. Waiting here would hold up the very
+            // connection that brings the rest of it, so say "not yet": the session asks again
+            // when the copy is complete.
+            if (!GrowingFiles.isComplete(file)) return false
             _ambiguous.value = null
             withContext(main) { player.jamLoad(receivedTrack(ref, file), positionMs, play) }
             return true

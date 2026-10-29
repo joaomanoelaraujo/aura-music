@@ -17,6 +17,8 @@ data class LibraryRules(
     val folderRules: List<FolderRule> = emptyList(),
     val excludedFolders: Set<String> = emptySet(),
     val hideWhatsApp: Boolean = false,
+    /** Hide files titled only with a date, a time or hashtags ([TitlePatterns]). */
+    val hideTimestampTitles: Boolean = false,
     val showUntagged: Boolean = true,
     val metadata: Map<Long, MetadataOverride> = emptyMap(),
 )
@@ -59,6 +61,7 @@ object LibraryAssembler {
             when {
                 override?.hidden == true || (override == null && folderRule?.hidden == true) -> hidden += track
                 kind.isWhatsApp && rules.hideWhatsApp && userKind == null -> Unit
+                rules.hideTimestampTitles && userKind == null && TitlePatterns.isTimestampOrHashtags(item.track.title) -> Unit
                 kind == AudioKind.Music -> music += track
                 else -> audios += track
             }
