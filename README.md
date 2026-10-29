@@ -21,6 +21,17 @@ Requisitos: JDK 17+, Android SDK com `platforms;android-37` e `build-tools;37.0.
 
 `compileSdk 37` é exigido pelas versões atuais do AndroidX; `targetSdk 36`, `minSdk 29` (Android 10).
 
+## AURA Desktop (em desenvolvimento)
+
+Versão para computador (Windows primeiro) no módulo `:desktop`, em Compose for Desktop com áudio
+pelo FFmpeg. Modelos, índice da biblioteca, busca inteligente e cores da Atmosfera ficam no módulo
+`:core` (Kotlin/JVM puro), usado pelo Android e pelo Desktop. Veja [desktop/README.md](desktop/README.md)
+e o registro de decisões em [desktop/ARCHITECTURE.md](desktop/ARCHITECTURE.md).
+
+```bash
+./gradlew :desktop:run
+```
+
 ## Stack
 
 Kotlin 2.4 · AGP 9.4 (Kotlin embutido) · Jetpack Compose (BOM 2026.09) · Material 3 apenas como

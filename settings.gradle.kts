@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Aura"
 include(":app")
+include(":core")
+include(":desktop")

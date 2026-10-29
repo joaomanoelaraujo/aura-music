@@ -1,0 +1,40 @@
+package com.aura.music
+
+import com.aura.music.core.model.Track
+
+fun track(
+    id: Long,
+    title: String = "Track $id",
+    artist: String? = "Artist",
+    artistId: Long = 1,
+    album: String? = "Album",
+    albumId: Long = 1,
+    albumArtist: String? = null,
+    durationMs: Long = 180_000,
+    trackNumber: Int = id.toInt(),
+    discNumber: Int = 1,
+    year: Int? = 2020,
+    dateAddedSec: Long = id,
+    genre: String? = null,
+    folder: String = "Music/",
+) = Track(
+    id = id,
+    uri = "content://media/external/audio/media/$id",
+    title = title,
+    artist = artist,
+    artistId = artistId,
+    album = album,
+    albumId = albumId,
+    albumArtist = albumArtist,
+    durationMs = durationMs,
+    trackNumber = trackNumber,
+    discNumber = discNumber,
+    year = year,
+    dateAddedSec = dateAddedSec,
+    genre = genre,
+    folder = folder,
+    displayName = "$title.mp3",
+    mimeType = "audio/mpeg",
+    sizeBytes = 4_000_000,
+    bitrate = 320_000,
+)
