@@ -1,0 +1,28 @@
+# Build output
+.gradle/
+build/
+/app/build/
+.kotlin/
+captures/
+dist/
+*.apk
+*.aab
+
+# Machine-specific
+local.properties
+.idea/
+*.iml
+
+# Signing keys never belong in the repository
+*.jks
+*.keystore
+
+# Personal tooling (AI assistants, editors)
+.claude/
+.codex/
+.agents/
+.mcp.json
+skills-lock.json
+
+# The invite site and relay live in their own repository
+github-pages/

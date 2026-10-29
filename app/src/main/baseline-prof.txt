@@ -1,0 +1,4 @@
+# Compile all of AURA's own code ahead of time on install (via androidx.profileinstaller), instead
+# of interpreting it during the first scrolls. Compose and the other libraries ship their own rules.
+HSPLcom/aura/music/**->**(**)**
+Lcom/aura/music/**;

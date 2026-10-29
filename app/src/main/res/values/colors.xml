@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="aura_background">#101114</color>
+    <color name="aura_mark">#F5F5F7</color>
+    <color name="aura_accent">#C7C2EE</color>
+</resources>

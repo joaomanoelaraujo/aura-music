@@ -1,0 +1,9 @@
+# Keep shell scripts runnable on Linux/macOS and batch files on Windows, whatever the checkout.
+* text=auto
+gradlew text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.png binary
+*.webp binary
+*.ttf binary
