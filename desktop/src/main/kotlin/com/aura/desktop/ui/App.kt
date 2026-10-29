@@ -113,15 +113,19 @@ fun AuraApp(model: AppModel, searchFocus: FocusRequester, onAddFolder: () -> Uni
                         VerticalDivider(Modifier.fillMaxHeight())
                         Content(model, searchFocus, onAddFolder, Modifier.weight(1f))
                         val settings by model.settings.settings.collectAsState()
-                        if (settings.queuePanelOpen) {
+                        if (settings.queuePanelOpen && model.screen != Screen.NowPlaying) {
                             VerticalDivider(Modifier.fillMaxHeight())
-                            QueuePanel(model)
+                            SidePanel(model, settings.sidePanel)
                         }
                     }
                     Divider()
                     PlayerBar(model)
                 }
                 Notice(model, Modifier.align(Alignment.BottomCenter).padding(bottom = 104.dp))
+                DialogHost(model)
+                PairingOfferOverlay(model)
+                IncomingTransferOverlay(model)
+                JamRequestsOverlay(model)
                 if (dropping) DropOverlay()
             }
         }
@@ -143,14 +147,39 @@ private fun Sidebar(model: AppModel, onAddFolder: () -> Unit) {
         NavItem(AuraIcons.Album, "Álbuns", library.index.albums.size, screen is Screen.Albums || screen is Screen.Album) { model.open(Screen.Albums) }
         NavItem(AuraIcons.Artist, "Artistas", library.index.artists.size, screen is Screen.Artists || screen is Screen.Artist) { model.open(Screen.Artists) }
         NavItem(AuraIcons.Folder, "Pastas", library.folders.size, screen is Screen.Folders || screen is Screen.Folder) { model.open(Screen.Folders) }
-        Spacer(Modifier.weight(1f))
+        if (model.discover != null) NavItem(AuraIcons.Discover, "Descobrir", 0, screen is Screen.Discover) { model.open(Screen.Discover) }
+        model.together?.let { t ->
+            val jam by t.role.collectAsState()
+            NavItem(AuraIcons.Together, if (jam is com.aura.desktop.together.JamRole.Idle) "Together" else "Together · na jam", 0, screen is Screen.Together) { model.open(Screen.Together) }
+        }
+        val data by model.userData.value.collectAsState()
+        Row(Modifier.fillMaxWidth().padding(start = 10.dp, top = 22.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("PLAYLISTS", style = AuraType.label, color = c.textTertiary, modifier = Modifier.weight(1f))
+            AuraIconButton(AuraIcons.Plus, "Nova playlist", { model.dialog = Dialog.NewPlaylist() }, size = 26.dp, iconSize = 15.dp)
+        }
+        NavItem(AuraIcons.Heart, "Favoritas", data.favorites.size, screen is Screen.Favorites) { model.open(Screen.Favorites) }
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f)) {
+            items(data.playlists.size, key = { data.playlists[it].id }) { i ->
+                val p = data.playlists[i]
+                NavItem(AuraIcons.Playlist, p.name, p.paths.size, (screen as? Screen.Playlist)?.id == p.id) { model.open(Screen.Playlist(p.id)) }
+            }
+        }
         library.scanning?.let { p ->
             Text(
                 if (p.total == 0) "Procurando músicas…" else "Lendo ${p.done} de ${p.total}",
                 style = AuraType.small, color = c.textSecondary, modifier = Modifier.padding(start = 10.dp, bottom = 10.dp),
             )
         }
-        PillButton("Adicionar pasta", onAddFolder, AuraIcons.Plus, primary = false, modifier = Modifier.fillMaxWidth())
+        model.link?.let { link ->
+            val linkState by link.state.collectAsState()
+            Text("DISPOSITIVOS", style = AuraType.label, color = c.textTertiary, modifier = Modifier.padding(start = 10.dp, top = 14.dp, bottom = 6.dp))
+            NavItem(AuraIcons.Together, "Dispositivos", linkState.peers.size, screen is Screen.Devices) { model.open(Screen.Devices) }
+            linkState.peers.filter { it.connected }.forEach { peer ->
+                NavItem(AuraIcons.Wave, peer.device.name, 0, (screen as? Screen.Remote)?.deviceId == peer.device.deviceId) { model.open(Screen.Remote(peer.device.deviceId)) }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        NavItem(AuraIcons.Tune, "Configurações", 0, screen is Screen.Settings) { model.open(Screen.Settings) }
     }
 }
 
@@ -172,7 +201,7 @@ private fun NavItem(icon: ImageVector, label: String, count: Int, selected: Bool
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = if (selected) c.accent else c.textSecondary, modifier = Modifier.size(19.dp))
-        Text(label, style = AuraType.bodyStrong, color = if (selected) c.textPrimary else c.textSecondary, modifier = Modifier.padding(start = 12.dp).weight(1f))
+        Text(label, style = AuraType.bodyStrong, color = if (selected) c.textPrimary else c.textSecondary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp).weight(1f))
         if (count > 0) Text("$count", style = AuraType.small, color = c.textTertiary)
     }
 }
@@ -194,7 +223,7 @@ private fun Content(model: AppModel, searchFocus: FocusRequester, onAddFolder: (
         Box(Modifier.weight(1f)) {
             when {
                 !library.loaded -> Unit
-                library.folders.isEmpty() -> EmptyState(
+                library.folders.isEmpty() && model.screen != Screen.Settings && model.screen != Screen.Devices && model.screen != Screen.Discover && model.screen != Screen.Together && model.screen !is Screen.Remote -> EmptyState(
                     "Sua música, em primeiro plano.",
                     "Escolha a pasta onde estão as suas músicas. O AURA lê os arquivos no próprio computador: nada é enviado para a internet.",
                 ) { PillButton("Escolher pasta de músicas", onAddFolder, AuraIcons.Folder) }
@@ -202,10 +231,18 @@ private fun Content(model: AppModel, searchFocus: FocusRequester, onAddFolder: (
                     val query = model.query
                     val results by produceState(SmartResults(query = query), query, library.corpus) {
                         delay(80)
-                        value = withContext(Dispatchers.Default) { library.corpus.search(query, PersonalSignals.None) }
+                        value = withContext(Dispatchers.Default) { library.corpus.search(query, model.searchSignals()) }
                     }
                     SearchResults(model, results)
                 }
+                model.screen == Screen.Settings -> SettingsScreen(model)
+                model.screen == Screen.NowPlaying -> NowPlayingScreen(model)
+                model.screen == Screen.Devices -> DevicesScreen(model)
+                model.screen == Screen.Together && model.together != null -> TogetherScreen(model, model.together)
+                model.screen == Screen.Discover && model.discover != null && model.downloads != null -> DiscoverScreen(model, model.discover, model.downloads)
+                model.screen is Screen.Remote -> RemoteScreen(model, (model.screen as Screen.Remote).deviceId)
+                model.screen == Screen.Favorites -> FavoritesScreen(model)
+                model.screen is Screen.Playlist -> PlaylistScreen(model, (model.screen as Screen.Playlist).id)
                 library.index.isEmpty && library.scanning == null -> when (val s = model.screen) {
                     is Screen.Folders -> FoldersScreen(model, onAddFolder)
                     else -> EmptyState(
@@ -221,6 +258,14 @@ private fun Content(model: AppModel, searchFocus: FocusRequester, onAddFolder: (
                     is Screen.Album -> AlbumDetail(model, s.id)
                     is Screen.Artist -> ArtistDetail(model, s.id)
                     is Screen.Folder -> FolderDetail(model, s.path)
+                    Screen.Favorites -> FavoritesScreen(model)
+                    is Screen.Playlist -> PlaylistScreen(model, s.id)
+                    Screen.Settings -> SettingsScreen(model)
+                    Screen.NowPlaying -> NowPlayingScreen(model)
+                    Screen.Devices -> DevicesScreen(model)
+                    Screen.Together -> if (model.together != null) TogetherScreen(model, model.together)
+                    Screen.Discover -> if (model.discover != null && model.downloads != null) DiscoverScreen(model, model.discover, model.downloads)
+                    is Screen.Remote -> RemoteScreen(model, s.deviceId)
                 }
             }
         }

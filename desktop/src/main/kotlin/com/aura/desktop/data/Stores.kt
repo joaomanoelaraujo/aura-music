@@ -28,6 +28,11 @@ class SettingsStore(private val scope: CoroutineScope, private val path: Path = 
         scope.launch(Dispatchers.IO) { runCatching { JsonFiles.write(path, Settings.serializer(), next) } }
     }
 
+    /** Writes the settings now (used when the app closes). */
+    fun flush() {
+        runCatching { JsonFiles.write(path, Settings.serializer(), _settings.value) }
+    }
+
     private inline fun <T> MutableStateFlow<T>.updateAndGet(transform: (T) -> T): T {
         while (true) {
             val prev = value
@@ -74,6 +79,16 @@ class LibraryRepository(
             rescan()
         }
     }
+
+    /**
+     * The library's track for a saved path, or a stand-in built from the file name when the file is
+     * gone or its folder is unreachable ([isAvailable] tells which).
+     */
+    fun trackFor(path: String): com.aura.music.core.model.Track =
+        _state.value.index.track(LibraryMapper.trackId(path))
+            ?: LibraryMapper.toTrack(ScannedFile(path = path, sizeBytes = 0, modifiedMs = 0))
+
+    fun isAvailable(path: String): Boolean = _state.value.index.track(LibraryMapper.trackId(path)) != null
 
     fun addFolder(folder: Path) {
         val path = folder.toAbsolutePath().normalize().toString()

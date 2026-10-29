@@ -62,6 +62,8 @@ fun AuraNavHost(navController: NavHostController, modifier: Modifier = Modifier)
         composable<SearchRoute> { SearchScreen() }
         composable<DiscoverRoute> { DiscoverScreen() }
         composable<TogetherRoute> { TogetherScreen() }
+        composable<LinkRoute> { com.aura.music.feature.link.LinkScreen() }
+        composable<LinkRemoteRoute> { entry -> com.aura.music.feature.link.LinkRemoteScreen(entry.toRoute<LinkRemoteRoute>().deviceId) }
         composable<SettingsRoute> { SettingsScreen() }
         composable<SettingsSectionRoute> { entry -> SettingsSectionScreen(entry.toRoute<SettingsSectionRoute>().section) }
         composable<LicensesRoute> { LicensesScreen() }

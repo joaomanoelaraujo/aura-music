@@ -21,11 +21,12 @@ Requisitos: JDK 17+, Android SDK com `platforms;android-37` e `build-tools;37.0.
 
 `compileSdk 37` é exigido pelas versões atuais do AndroidX; `targetSdk 36`, `minSdk 29` (Android 10).
 
-## AURA Desktop (em desenvolvimento)
+## AURA Desktop (0.9.0, Windows)
 
-Versão para computador (Windows primeiro) no módulo `:desktop`, em Compose for Desktop com áudio
-pelo FFmpeg. Modelos, índice da biblioteca, busca inteligente e cores da Atmosfera ficam no módulo
-`:core` (Kotlin/JVM puro), usado pelo Android e pelo Desktop. Veja [desktop/README.md](desktop/README.md)
+Versão para computador no módulo `:desktop`, em Compose for Desktop com áudio pelo FFmpeg: player
+offline, letras, playlists, AURA Link (vincular e controlar o celular nos dois sentidos, enviar
+arquivos), Descobrir e Together com o Android. O código comum (modelos, busca, AURA Link, Together,
+Discover) fica no módulo `:core` (Kotlin/JVM puro), usado pelo Android e pelo Desktop. Veja [desktop/README.md](desktop/README.md)
 e o registro de decisões em [desktop/ARCHITECTURE.md](desktop/ARCHITECTURE.md).
 
 ```bash

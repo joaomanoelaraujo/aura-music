@@ -126,6 +126,12 @@ data class PlayQueue(
 
     fun withRepeat(mode: Repeat): PlayQueue = copy(repeat = mode)
 
+    /** Rebuilds a saved queue as it was (its pre-shuffle order isn't kept between runs). */
+    fun restored(tracks: List<Track>, index: Int, shuffle: Boolean, repeat: Repeat): PlayQueue {
+        val (wrapped, uid) = wrap(tracks, nextUid)
+        return PlayQueue(wrapped, if (wrapped.isEmpty()) -1 else index.coerceIn(0, wrapped.lastIndex), shuffle, repeat, wrapped, uid)
+    }
+
     private fun wrap(tracks: List<Track>, firstUid: Long): Pair<List<QueueItem>, Long> {
         var uid = firstUid
         return tracks.map { QueueItem(uid++, it) } to uid

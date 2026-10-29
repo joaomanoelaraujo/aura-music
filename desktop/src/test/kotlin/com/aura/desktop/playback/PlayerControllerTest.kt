@@ -95,6 +95,19 @@ class PlayerControllerTest {
     }
 
     @Test
+    fun restoreLoadsPausedAtThePosition() {
+        val songs = listOf(track("Album/01.mp3"), track("Album/02.flac"))
+        onMain { player.restore(songs, 1, 1_500, shuffle = true, repeat = Repeat.All) }
+        waitFor { engine.state.value.source == songs[1].uri }
+        Thread.sleep(200)
+        assertFalse(player.state.value.isPlaying)
+        assertEquals(1, player.state.value.queue.index)
+        assertTrue(player.state.value.queue.shuffle)
+        assertEquals(Repeat.All, player.state.value.queue.repeat)
+        assertEquals(1_500L, engine.positionMs)
+    }
+
+    @Test
     fun pauseAndResume() {
         onMain { player.playTracks(listOf(track("Album/02.flac")), 0) }
         waitFor { player.state.value.isPlaying }

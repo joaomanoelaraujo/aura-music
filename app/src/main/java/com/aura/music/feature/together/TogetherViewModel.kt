@@ -29,9 +29,11 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.channels.awaitClose
 
 @HiltViewModel
 class TogetherViewModel @Inject constructor(
+    @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val together: TogetherController,
     private val player: PlayerConnection,
     private val settings: SettingsRepository,
@@ -78,6 +80,27 @@ class TogetherViewModel @Inject constructor(
     fun command(command: Command) = together.command(command)
     fun respond(request: JoinRequest, accept: Boolean) = together.respond(request, accept)
     fun kick(id: String) = together.kick(id)
+
+    /**
+     * True on a metered network (mobile data): songs missing here come from the host and use the
+     * user's data plan, so the jam screen says so.
+     */
+    val metered: StateFlow<Boolean> = kotlinx.coroutines.flow.callbackFlow {
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
+        trySend(cm?.isActiveNetworkMetered == true)
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(network: android.net.Network, caps: android.net.NetworkCapabilities) {
+                trySend(!caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED))
+            }
+            override fun onLost(network: android.net.Network) {
+                trySend(cm?.isActiveNetworkMetered == true)
+            }
+        }
+        runCatching { cm?.registerDefaultNetworkCallback(callback) }
+        awaitClose { runCatching { cm?.unregisterNetworkCallback(callback) } }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun revokeInvites() = together.revokeInvites()
     fun react(emoji: String) = together.react(emoji)
     val reactions = together.reactions
     fun setCanControl(id: String, allowed: Boolean) = together.setCanControl(id, allowed)

@@ -37,6 +37,10 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.javacpp)
     implementation(libs.ffmpeg)
+    implementation(libs.bouncycastle)
+    implementation(libs.zxing.core)
+    implementation(libs.jmdns)
+    implementation(libs.jna.platform)
     runtimeOnly(variantOf(libs.javacpp) { classifier(nativePlatform) })
     runtimeOnly(variantOf(libs.ffmpeg) { classifier(nativePlatform) })
 
@@ -54,10 +58,10 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "AURA"
-            packageVersion = "0.1.0"
+            packageVersion = "0.9.0"
             description = "AURA — player de música"
             vendor = "AURA"
-            modules("java.desktop", "java.logging", "jdk.unsupported")
+            modules("java.desktop", "java.logging", "jdk.unsupported", "jdk.crypto.ec", "java.naming")
             windows {
                 menuGroup = "AURA"
                 shortcut = true
@@ -67,4 +71,14 @@ compose.desktop {
             }
         }
     }
+}
+
+// Manual end-to-end harness for AURA Link against the Android app (see LinkHarness.kt). Not part of the build.
+tasks.register<JavaExec>("linkHarness") {
+    group = "verification"
+    description = "Runs the headless desktop AURA Link harness"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.aura.desktop.link.LinkHarnessKt")
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(21)) })
+    args = (project.findProperty("harnessArgs") as String? ?: "").split("|")
 }

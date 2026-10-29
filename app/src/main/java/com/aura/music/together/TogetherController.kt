@@ -166,6 +166,7 @@ class TogetherController @Inject constructor(
         val name = sessionName.ifBlank { "Jam de $hostName" }
         // Proves to the relay that this phone owns the room; never leaves the device otherwise.
         val relayToken = randomId(32)
+        val inviteId = randomId()
         streamCache.clear()
         received.clear()
         fun create(port: Int?) = HostSession(
@@ -179,6 +180,7 @@ class TogetherController @Inject constructor(
                 requireApproval = prefs.approveJoins,
                 port = port,
                 relay = RelayConfig(relay, relayToken),
+                inviteId = inviteId,
             ),
             HostAdapter(),
             ::clock,
@@ -195,7 +197,8 @@ class TogetherController @Inject constructor(
         } ?: return StartResult.Failed
         host = session
         val port = session.port
-        val invite = Invite(sessionId, address, port, key, hostName, name, relay = true)
+        val invite = Invite(sessionId, address, port, key, hostName, name, relay = true, inviteId = inviteId)
+        hostInvite = invite
         val link = invite.toLink(BuildConfig.INVITE_BASE_URL)
         // Debug builds only, for automated two-device tests; release builds never log the key.
         if (BuildConfig.DEBUG) android.util.Log.d("AuraTogether", "invite $link")
@@ -295,6 +298,21 @@ class TogetherController @Inject constructor(
     }
 
     fun kick(participantId: String) = host?.kick(participantId)
+
+    /** The invite of the running jam, without the id (it changes when invites are revoked). */
+    private var hostInvite: Invite? = null
+
+    /**
+     * Revokes every invite link shared so far and makes a new one. People already in the jam stay;
+     * old links stop letting anyone in.
+     */
+    fun revokeInvites() {
+        val session = host ?: return
+        val invite = hostInvite ?: return
+        val fresh = invite.copy(inviteId = session.revokeInvites())
+        hostInvite = fresh
+        _role.update { (it as? TogetherRole.Hosting)?.copy(link = fresh.toLink(BuildConfig.INVITE_BASE_URL)) ?: it }
+    }
 
     fun react(emoji: String) {
         host?.hostReact(emoji) ?: guest?.react(emoji)

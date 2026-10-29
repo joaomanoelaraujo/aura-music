@@ -14,6 +14,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -23,7 +24,15 @@ class TrackActionsViewModel @Inject constructor(
     private val favorites: FavoritesRepository,
     private val playlists: PlaylistRepository,
     private val classification: ClassificationRepository,
+    private val link: com.aura.music.link.LinkController,
 ) : ViewModel() {
+
+    /** Linked computers connected now that accept files: (deviceId, name). */
+    val sendTargets: StateFlow<List<Pair<String, String>>> = link.state
+        .map { s -> s.computers.filter { it.connected && com.aura.music.link.LinkCapabilities.FILES in it.capabilities }.map { it.device.deviceId to it.device.name } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun sendTo(deviceId: String, track: Track) = link.sendFiles(deviceId, listOf(track))
 
     /** Files whose classification the user changed, so the sheet can offer to undo it. */
     val overrides: StateFlow<Map<Long, ClassificationOverride>> = classification.overrides

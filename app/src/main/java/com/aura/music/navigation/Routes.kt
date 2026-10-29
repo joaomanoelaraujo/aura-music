@@ -12,6 +12,12 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object TogetherRoute
 
+/** Settings → Dispositivos (AURA Link). */
+@Serializable data object LinkRoute
+
+/** Controlling a linked computer. */
+@Serializable data class LinkRemoteRoute(val deviceId: String)
+
 enum class LibraryTab { Songs, Albums, Artists, Playlists, Folders, Genres, Audios }
 
 @Serializable data object SettingsRoute

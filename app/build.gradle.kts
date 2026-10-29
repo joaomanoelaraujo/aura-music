@@ -66,6 +66,11 @@ room {
 
 dependencies {
     implementation(project(":core"))
+    // AURA Link: QR code scanning for pairing with a computer.
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+    implementation(libs.zxing.core)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)

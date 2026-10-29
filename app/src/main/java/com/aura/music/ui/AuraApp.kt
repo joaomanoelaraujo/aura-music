@@ -91,6 +91,9 @@ private fun MainScaffold(viewModel: MainViewModel, miniPlayerStyle: MiniPlayerSt
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val messenger = remember { Messenger(snackbarHost, scope) }
+    val controlledBy by viewModel.controlledBy.collectAsStateWithLifecycle()
+    val controlledText = controlledBy?.let { androidx.compose.ui.res.stringResource(R.string.link_controlled_by, it) }
+    LaunchedEffect(controlledText) { controlledText?.let(messenger::show) }
     val sheetState = rememberPlayerSheetState()
     val hasMedia by viewModel.hasMedia.collectAsStateWithLifecycle()
     val backStack by navController.currentBackStackEntryAsState()
@@ -228,4 +231,4 @@ private fun BottomScrim(height: Dp, modifier: Modifier = Modifier) {
 
 /** Utility screens hide the bottom navigation to give their content the full height. */
 private fun NavDestination.isFullScreen(): Boolean =
-    hasRoute<SettingsRoute>() || hasRoute<SettingsSectionRoute>() || hasRoute<TogetherRoute>() || hasRoute<LicensesRoute>() || hasRoute<TrackPickerRoute>()
+    hasRoute<SettingsRoute>() || hasRoute<SettingsSectionRoute>() || hasRoute<TogetherRoute>() || hasRoute<com.aura.music.navigation.LinkRoute>() || hasRoute<com.aura.music.navigation.LinkRemoteRoute>() || hasRoute<LicensesRoute>() || hasRoute<TrackPickerRoute>()

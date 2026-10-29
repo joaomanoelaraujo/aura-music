@@ -24,6 +24,11 @@ work = "2.12.0"
 composeMultiplatform = "1.12.2"
 javacpp = "1.5.14"
 ffmpeg = "8.1.2-1.5.14"
+bouncycastle = "1.86"
+zxing = "3.5.4"
+jmdns = "3.6.4"
+jna = "5.19.1"
+camerax = "1.6.2"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -74,6 +79,13 @@ junit = { module = "junit:junit", version.ref = "junit" }
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 javacpp = { module = "org.bytedeco:javacpp", version.ref = "javacpp" }
 ffmpeg = { module = "org.bytedeco:ffmpeg", version.ref = "ffmpeg" }
+bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+jmdns = { module = "org.jmdns:jmdns", version.ref = "jmdns" }
+jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jna" }
+camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+camerax-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

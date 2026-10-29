@@ -54,6 +54,8 @@ class Navigator(private val navController: NavHostController) {
     fun openSettings() = navController.navigate(SettingsRoute) { launchSingleTop = true }
     fun openLicenses() = navController.navigate(LicensesRoute)
     fun openTogether() = navController.navigate(TogetherRoute) { launchSingleTop = true }
+    fun openLink() = navController.navigate(LinkRoute) { launchSingleTop = true }
+    fun openLinkRemote(deviceId: String) = navController.navigate(LinkRemoteRoute(deviceId))
     fun openSettingsSection(section: SettingsSection) = navController.navigate(SettingsSectionRoute(section)) { launchSingleTop = true }
     fun openSearch() = openTopLevel(SearchRoute)
     fun openTrackPicker(playlistId: Long?) = navController.navigate(TrackPickerRoute(playlistId))

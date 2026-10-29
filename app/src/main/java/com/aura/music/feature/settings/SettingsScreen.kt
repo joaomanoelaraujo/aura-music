@@ -79,6 +79,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     navigator.openSettingsSection(SettingsSection.Backup)
                 }
             }
+            item {
+                CategoryRow(AuraIcons.Together, stringResource(R.string.link_title), stringResource(R.string.link_summary)) {
+                    navigator.openLink()
+                }
+            }
 
             item { SettingsSection(stringResource(R.string.settings_about)) }
             item { InfoRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME) }

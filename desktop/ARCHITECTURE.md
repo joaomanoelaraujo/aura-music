@@ -1,7 +1,7 @@
 # AURA Desktop — auditoria e decisão de arquitetura
 
-Registro da Fase 1 (auditoria e escolha da stack) e do que foi construído na primeira entrega
-(Fase 2, parte inicial). Datas: 28–29/10/2026.
+Registro da Fase 1 (auditoria e escolha da stack) e do que foi construído nas Fases 2 a 9.
+Datas: 28–29/10/2026.
 
 ## 1. O que foi auditado no projeto Android (confirmado no código)
 
@@ -16,25 +16,29 @@ Registro da Fase 1 (auditoria e escolha da stack) e do que foi construído na pr
 | Persistência | Room v6 (migrações automáticas 1→6) e DataStore. |
 | Design | Paleta e tokens em `core/designsystem/theme`, ícones próprios em `core/designsystem/icons/AuraIcons.kt` (só APIs de vetor do Compose), Atmosfera Adaptativa em `core/designsystem/atmosphere` (matemática de cor pura + extração com `androidx.palette`). |
 
-### Achados de segurança do Together (a corrigir na Fase 7, antes de interoperar com o Desktop)
+### Achados de segurança do Together (situação após a Fase 7: `PROTOCOL = 6`)
 
 1. **Tomada de identidade de participante.** `Message.Hello` aceita um `participantId` para reconexão
    (`HostSession.kt`, `handle`), e os ids de todos vão no `SessionState.participants` para todos.
    Um convidado que conhece o id de outro pode entrar como ele: pula a aprovação, herda as
-   permissões e derruba a conexão original. Correção prevista: segredo de reconexão por participante,
-   entregue só a ele no `Welcome`.
+   permissões e derruba a conexão original. **Corrigido:** cada participante recebe um
+   `resumeToken` só seu no `Welcome`; sem ele, o mesmo id não é aceito.
 2. **Sem proteção contra replay.** Os quadros GCM não têm número de sequência e o anfitrião não
    descarta `requestId` repetido. Quem estiver no caminho (o relay, ou alguém capaz de injetar na
-   conexão local) pode reenviar um comando capturado. Correção: contador por direção dentro do
-   quadro autenticado.
+   conexão local) pode reenviar um comando capturado. **Corrigido:** `SecureLink.open` troca
+   nonces e deriva um id de conexão; o dado associado do GCM leva id + sentido + contador, então
+   quadro repetido, reordenado ou de outra conexão é rejeitado.
 3. **Chave única da sala.** Todos os participantes têm a mesma chave; ela não prova *quem* enviou.
    A topologia (convidados só falam com o anfitrião) impede hoje um convidado de se passar pelo
    anfitrião para os outros, **exceto** pelo item 4.
-4. **Sala do relay reivindicável.** Quando o último socket do anfitrião fecha, o Worker apaga o dono
-   da sala (`storage.deleteAll()`); o próximo a conectar em `/host` vira dono. Um convidado (que tem
-   o `sessionId` e a chave) poderia assumir o papel de anfitrião durante uma queda. Correção: o
-   anfitrião assina com uma chave própria, ou a sala guarda o dono até o fim da sessão.
-5. Convites não expiram nem podem ser revogados individualmente (só encerrando a jam).
+4. ~~Sala do relay reivindicável.~~ **Achado errado, corrigido na revisão:** o Worker só apaga o
+   dono (`hostHash`) por alarme, `IDLE_ROOM_MS` = 15 min depois que o último socket do anfitrião
+   fecha; dentro desse prazo `/host` com outro token recebe 403. Além disso o token do anfitrião
+   não está no convite, então um convidado não o conhece. Nenhuma mudança no Worker foi necessária
+   (e nenhuma foi implantada).
+5. Convites não expiravam nem podiam ser revogados. **Corrigido:** cada convite tem um `inviteId`;
+   “Invalidar convites” (Android e Desktop) gera um novo e recusa os antigos com
+   `RejectReason.InviteRevoked`, sem derrubar quem já está na jam.
 
 ## 2. Decisão de stack: Kotlin/JVM + Compose for Desktop + FFmpeg
 
@@ -84,43 +88,150 @@ Identidade das faixas no Desktop: id = SHA-256 do caminho normalizado (estável 
 local ao computador). Para Together/AURA Link continuará valendo o `TrackRef` + correspondência por
 metadados; hash de conteúdo pode ser adicionado como desempate, nunca como único critério.
 
-## 4. Riscos técnicos conhecidos
+## 3b. AURA Link (Fase 4)
+
+Vínculo privado entre os aparelhos da mesma pessoa; separado do Together (um convite de jam não
+dá acesso a nada disto). Código do protocolo e da criptografia em `:core` (`com.aura.music.link`),
+o mesmo no Android e no Desktop.
+
+- **Pareamento**: o computador abre uma janela de 5 minutos e mostra um QR Code (segredo de 256 bits)
+  e um código de 8 dígitos. Os dois lados rodam **SPAKE2 (RFC 9382) sobre P-256**: só quem conhece o
+  segredo chega à mesma chave, e um atacante no meio tem um palpite por tentativa, sem como testar
+  palpites offline — por isso o código curto é seguro com o limite de **5 tentativas**. Depois, cada
+  lado envia sua chave de identidade assinada sobre a transcrição, os dois mostram o mesmo número
+  de verificação de 6 dígitos e o vínculo só existe se o usuário aceitar nos dois.
+- **Identidade**: par de chaves EC P-256 por aparelho. No Windows a chave privada fica cifrada com
+  **DPAPI** (só a conta do Windows consegue abrir); no Android fica no **Keystore** (não exportável).
+- **Reconexão**: ECDH efêmero (sigilo futuro) + assinatura de cada lado com a chave de identidade,
+  conferida contra a chave guardada no pareamento. Nome, IP ou presença na rede não bastam.
+- **Canal**: AES-256-GCM com contador por direção no nonce; quadro repetido, fora de ordem ou
+  adulterado derruba a conexão (proteção contra replay). Comandos têm id crescente e duplicados são
+  descartados.
+- **Permissões por aparelho** (decididas no aparelho que é controlado): controlar a reprodução;
+  ver e tocar a biblioteca. Conferidas a cada comando no lado que recebe.
+- **Desconectar por agora** recusa reconexões até o usuário permitir; **remover vínculo** avisa o
+  outro lado, apaga a chave dele e recusa qualquer reconexão.
+- **Rede**: TCP na porta 47820 (ou outra livre), só na rede local nesta fase; anúncio mDNS
+  `_auralink._tcp` (JmDNS) com um id curto derivado do id do aparelho. O computador só começa a
+  escutar quando há aparelho vinculado ou janela de pareamento aberta. Quem conecta é o celular
+  (o Android não mantém servidor em segundo plano); a conexão serve aos dois sentidos.
+- **Estado**: o aparelho que toca é a fonte da verdade e envia seu estado quando algo muda; quem
+  controla extrapola a posição pelo próprio relógio. Volume é o do app, nunca o do sistema.
+
+Testes: `LinkSecurityTest` (14, em `:core`: SPAKE2, código errado, recusa, impostor com a mesma
+identidade, aparelho falso respondendo, replay/reordem/adulteração, duplicatas) e
+`LinkServiceTest` (5, no Desktop contra um "celular" simulado com o mesmo código do `:core`).
+
+## 3c. Transferência de arquivos (Fase 5)
+
+- Sobre o mesmo canal cifrado do AURA Link, num segundo socket (`ChannelHello.Data`) para não
+  atrasar comandos. Oferta (`TransferOfferMessage`: nomes, tamanhos, SHA-256) → resposta → dados.
+- Quem recebe decide: pergunta a cada oferta, a menos que o aparelho tenha a permissão
+  “receber arquivos sem perguntar”. Só arquivos de áudio; nomes saneados (`FileNames`), nunca
+  sobrescreve (acrescenta “ (2)”).
+- Grava em `.part` (`StagingSink`), retoma do ponto onde parou após queda (pedido com deslocamento),
+  confere o SHA-256 e só então publica: no Android pelo MediaStore em `Música/AURA`; no Desktop na
+  pasta escolhida em Configurações (padrão `Música\AURA`), que entra na biblioteca.
+- Cancelar dos dois lados; “Tentar de novo” retoma. Testes: `TransferChannelTest` (7, `:core`) e
+  `TransfersTest` (5, Desktop).
+
+## 3d. Descobrir no Desktop (Fase 6)
+
+- O mesmo código do Android, movido para `:core`: Internet Archive (licença como declarada por quem
+  publicou, mostrada antes de baixar) e links diretos HTTPS de arquivos de áudio.
+- YouTube e Spotify: só título/capa via oEmbed e “Abrir no app oficial”. **Nada de download, nada
+  de contornar DRM.**
+- Downloads (`DesktopDownloads`): só HTTPS, `.part` com retomada, cancelar, salva na pasta de
+  downloads e entra na biblioteca. Opção “Baixar e enviar para o celular” usa a transferência da
+  Fase 5. Testes: `DownloadsTest` (6), `DiscoverParsingTest` (`:core`).
+
+## 3e. Together Desktop ↔ Android (Fase 7)
+
+- Protocolo, sessões de anfitrião/convidado, sincronização e transporte movidos para `:core`; o
+  Desktop usa exatamente o mesmo código (`DesktopTogether`). `PROTOCOL = 6` com as correções acima;
+  aparelhos com a versão 5 recebem “atualize o app”.
+- Desktop pode ser anfitrião (rede local e relay) ou convidado. Como convidado, corrige o desvio só
+  por seek (limite 150 ms, intervalo mínimo 3 s): o Java Sound não permite ajustar a velocidade sem
+  reamostrar.
+- Enquanto está numa jam, os comandos locais do player viram pedidos ao anfitrião (`redirect`).
+
+## 3f. Streaming autorizado (Fase 8) — avaliação e decisão
+
+O que se quer: alguém da jam ouve uma música que só o anfitrião tem.
+
+| Opção | Prós | Contras |
+|---|---|---|
+| **Cópia temporária progressiva pelo Together (atual)** | Já existe e foi testada; mesma criptografia e mesmo controle de acesso da jam; funciona pela rede local e pelo relay; toca antes de terminar de chegar; sem servidor novo. | Passa pelo relay quando não há rede local (quadros de 64 KiB, banda do Worker); usa o plano de dados de quem recebe. |
+| WebRTC (dados ou áudio) | Ponto a ponto; baixa latência. | Precisa de STUN e, com CGNAT (comum em celular), de TURN — servidor pago e novo serviço em produção; muito mais código nos dois apps; outro modelo de segurança a auditar. |
+| Servidor de streaming (HLS etc.) | Padrão de mercado. | Hospedar música de terceiros num servidor nosso: problema de direitos, custo e privacidade. Descartado. |
+
+**Decisão: manter a cópia temporária progressiva.** Regras que a tornam “autorizada”:
+- **Consentimento:** no Desktop, receber músicas que faltam é opcional ao entrar (desligado por
+  padrão); no Android é ligado, com aviso na tela da jam quando a rede é medida (dados móveis).
+- **Acesso:** o anfitrião só envia músicas que estão na fila da jam, só a participantes aprovados;
+  nada da biblioteca é listado.
+- **Revogação e limpeza:** expulsar alguém ou encerrar a jam corta o envio; o cache temporário é
+  apagado ao sair. Nenhum arquivo fica na biblioteca de quem recebeu.
+- YouTube/Spotify continuam fora: não há streaming de serviços de terceiros.
+
+Revisitar WebRTC só se o custo de banda do relay se tornar um problema medido.
+
+## 3g. Integração com o Windows e pacote (Fase 9)
+
+- Teclas de mídia do teclado funcionam com a janela sem foco (`RegisterHotKey`; teclas que outro
+  app já reservou são ignoradas). Ícone na área de notificação com tocar/pausar, próxima, anterior.
+  Barra de título escura (`DwmSetWindowAttribute`).
+- MSI por usuário (`AURA-0.9.0.msi`, ~105 MB, Java 21 embutido), sem pedir administrador.
+
+## 4. Riscos técnicos e limitações conhecidas
 
 - **Java Sound no Windows** usa o mixer DirectSound; sem modo exclusivo/bit-perfect. Tudo é
   reamostrado para 48 kHz/16 bits. Se for preciso, troca-se só o `AudioSink` (ex.: WASAPI via JNI).
-- **Controles de mídia do sistema** (teclas de mídia, SMTC do Windows) exigem código nativo: ainda
-  não feitos. Os atalhos funcionam com a janela em foco.
-- **Tamanho:** o pacote leva todas as bibliotecas do FFmpeg (~30 MB compactadas). Dá para reduzir
-  com um build próprio do FFmpeg só com demuxers/decoders de áudio.
-- **Atualizações automáticas:** `jpackage` não oferece. Avaliar na Fase 9.
+- **SMTC** (painel de mídia do Windows com capa) não foi feito; as teclas de mídia funcionam por
+  `RegisterHotKey`.
+- **Together como convidado no Desktop** corrige desvio só por seek (sem ajuste fino de velocidade).
+- **AURA Link**: só na rede local; o celular precisa estar com o app aberto para conectar (o
+  Android não mantém conexão em segundo plano nesta versão).
+- **Sem atualização automática** (`jpackage` não oferece); nova versão = instalar o novo MSI por cima.
+- **Instalador sem assinatura de código**: o Windows SmartScreen pode avisar.
+- **Tamanho:** o pacote leva todas as bibliotecas do FFmpeg. Dá para reduzir com um build próprio só
+  com demuxers/decoders de áudio.
 - **macOS/Linux:** o build escolhe o classificador nativo do sistema que compila, mas nada foi testado
   fora do Windows.
-- **Persistência:** a primeira entrega usa JSON (pastas, configurações, cache da varredura). Playlists
-  e favoritos pedirão SQLite (Room também roda na JVM) na Fase 3.
-- O teste `TogetherSessionTest` do Android falha às vezes no Windows por bloqueio de arquivo
-  (1 vez em 5 execuções nesta máquina); já existia e não tem relação com esta mudança.
+- `TogetherSessionTest` tem testes sensíveis a tempo; sob carga (várias suítes em paralelo) uma
+  espera de 5 s estourou uma vez e foi ampliada para 10 s.
 
-## 5. O que foi testado nesta entrega (e como)
+## 5. O que foi testado (e como)
 
-Tudo nesta máquina Windows 11, JDK 21. Nada em celular.
+Máquina Windows 11, JDK 21. **Testes com Android foram feitos no emulador (`nex_e2e`), não em
+celular físico.** O teste em aparelho físico continua pendente.
 
-- `:desktop:test` — 32 testes:
-  - decodificação de MP3, FLAC, OGG/Vorbis, M4A/AAC, Opus e WAV (duração ±80 ms), seek com
-    precisão de ±25 ms, volume, arquivo inválido rejeitado;
-  - varredura: tags com acentos, arquivo sem tags, arquivo que não é áudio ignorado, capa embutida
-    salva por álbum, cache reaproveitado, pasta inexistente;
-  - fila: aleatório com ordem original restaurada, repetir uma/todas, tocar a seguir, remover,
-    mover, mesma música duas vezes;
-  - controlador com decodificação real numa saída silenciosa em tempo real (4×): ordem da fila, fim
-    da fila, pular arquivo quebrado, fila só de arquivos quebrados não entra em loop, repetir uma,
-    pausar/retomar;
-  - captura das telas renderizadas fora da tela com a biblioteca real de teste;
-  - auto-teste com a **saída de áudio real** desta máquina (só silêncio).
-- `:core:test` — 28 testes (inclui os testes do índice, busca e cores movidos do Android).
-- `:app:testDebugUnitTest` — 157 testes, 4 ignorados; 1 falha intermitente já conhecida (acima).
-- Pacote: `createDistributable` e `packageMsi` gerados; `AURA.exe --self-test` do pacote passou
-  (FFmpeg 8.1.2/libavformat 62.12, decodificadores, saída de áudio).
+Testes automáticos (última execução, 29/10/2026):
+- `:core:test` — 123 testes, 3 ignorados, 0 falhas (AURA Link: SPAKE2, impostor, replay,
+  adulteração; transferências; Discover; Together com as correções de segurança).
+- `:desktop:test` — 61 testes, 0 falhas (áudio real decodificado, biblioteca, fila, dados do
+  usuário, letras, AURA Link contra um celular simulado, transferências, downloads, Together
+  Desktop↔Desktop, 18 telas renderizadas).
+- `:app:testDebugUnitTest` — 89 testes, 1 ignorado, 0 falhas (os testes do Together foram para `:core`).
+- `:app:assembleStaging` gerado.
 
-**Não testado ainda:** som audível (precisa de você ouvindo), a janela aberta de verdade (as
-capturas foram renderizadas fora da tela), instalação do MSI, bibliotecas grandes, escala de DPI
-diferente de 100 %, discos externos desconectados na prática.
+Ponta a ponta com o emulador Android (harness `LinkHarness` no Desktop):
+- Pareamento por código com os mesmos números de verificação; reconexão depois de reiniciar o
+  Desktop; Desktop→celular tocar e volume; celular→Desktop tocar, pausar e retomar; permissão
+  negada quando desligada; remover vínculo chega ao celular.
+- Arquivo Desktop→celular (MP3, 720 502 bytes, publicado em `Música/AURA` e visto na biblioteca) e
+  celular→Desktop (FLAC, 61 905 bytes, idêntico).
+- Jam com Desktop anfitrião e Android convidado pela rede local (aprovação, sincronia ±90 ms, cópia
+  temporária de música que faltava, pausa do celular pausou o Desktop) e com Android anfitrião e
+  Desktop convidado **pelo relay de produção** (RTT 333 ms, desvio 7–10 ms).
+
+Pacote:
+- `AURA.exe --self-test` do `createDistributable` passou (FFmpeg, decodificadores, saída de áudio).
+- MSI 0.9.0: instalação silenciosa por usuário (`msiexec /qn`, código 0) em
+  `%LOCALAPPDATA%\AURA`, `--self-test` da cópia instalada passou, desinstalação (código 0) removeu
+  os arquivos.
+- A janela do app empacotado abriu com a barra de título escura (captura de tela).
+
+**Não testado:** celular físico; som audível com alguém ouvindo; teclas de mídia num teclado real
+(registro feito, tecla não pressionada); bibliotecas grandes; DPI diferente de 100 %; outros
+computadores e redes (Wi-Fi com isolamento de clientes bloqueia o AURA Link); macOS/Linux.

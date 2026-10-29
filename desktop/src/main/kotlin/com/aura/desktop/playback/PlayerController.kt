@@ -73,11 +73,71 @@ class PlayerController(
 
     fun playTracks(tracks: List<Track>, start: Int) {
         if (tracks.isEmpty()) return
+        if (redirected(JamAction.Play(tracks, start))) return
         failures = 0
         setQueue(_state.value.queue.play(tracks, start), play = true)
     }
 
+    /** Puts a saved queue back, paused at [positionMs], without starting to play. */
+    fun restore(tracks: List<Track>, index: Int, positionMs: Long, shuffle: Boolean, repeat: Repeat) {
+        if (tracks.isEmpty()) return
+        val queue = _state.value.queue.restored(tracks, index, shuffle, repeat)
+        _state.update { it.copy(queue = queue) }
+        val current = queue.current?.track ?: return
+        engine.load(current.uri, startMs = positionMs, play = false)
+        _position.value = positionMs
+    }
+
+    /**
+     * While this computer is a guest in a jam, user actions go to the jam host instead of the local
+     * player (the host decides; the state comes back). Returns true when the action was taken.
+     */
+    @Volatile var redirect: ((JamAction) -> Boolean)? = null
+
+    sealed interface JamAction {
+        data object TogglePlayPause : JamAction
+        data object Next : JamAction
+        data object Previous : JamAction
+        data class Seek(val positionMs: Long) : JamAction
+        data class Play(val tracks: List<Track>, val start: Int) : JamAction
+        data class PlayNext(val tracks: List<Track>) : JamAction
+        data class AddToQueue(val tracks: List<Track>) : JamAction
+        /** Local-only changes (shuffle, repeat, queue edits) the guest can't make. */
+        data object LocalOnly : JamAction
+    }
+
+    private fun redirected(action: JamAction) = redirect?.invoke(action) == true
+
+    // ---- direct control used by the jam itself (never redirected)
+
+    /** Exact engine position, for sync. */
+    fun exactPositionMs(): Long = engine.positionMs
+
+    /** Loads [track] alone at [positionMs], playing or paused (jam guest following the host). */
+    fun jamLoad(track: Track, positionMs: Long, play: Boolean) {
+        val queue = PlayQueue().restored(listOf(track), 0, shuffle = false, repeat = Repeat.Off)
+        _state.update { it.copy(queue = queue) }
+        engine.load(track.uri, startMs = positionMs, play = play)
+        _position.value = positionMs
+    }
+
+    fun jamSetPlaying(playing: Boolean) {
+        if (playing == _state.value.isPlaying) return
+        if (playing) engine.play() else engine.pause()
+    }
+
+    fun jamSeek(positionMs: Long) {
+        engine.seekTo(positionMs)
+        _position.value = positionMs
+    }
+
+    fun jamStop() {
+        engine.stop()
+        _state.update { it.copy(queue = PlayQueue()) }
+    }
+
     fun togglePlayPause() {
+        if (redirected(JamAction.TogglePlayPause)) return
         val s = _state.value
         when {
             s.current == null -> Unit
@@ -87,10 +147,14 @@ class PlayerController(
         }
     }
 
-    fun next() = advance(auto = false)
+    fun next() {
+        if (redirected(JamAction.Next)) return
+        advance(auto = false)
+    }
 
     /** Back to the start of the song, or to the previous one when near the start. */
     fun previous() {
+        if (redirected(JamAction.Previous)) return
         val q = _state.value.queue
         if (q.current == null) return
         if (engine.positionMs > RESTART_THRESHOLD_MS || (q.index == 0 && q.repeat != Repeat.All)) {
@@ -101,6 +165,7 @@ class PlayerController(
     }
 
     fun seekTo(positionMs: Long) {
+        if (redirected(JamAction.Seek(positionMs))) return
         if (_state.value.current == null) return
         engine.seekTo(positionMs)
         _position.value = positionMs.coerceAtLeast(0)
@@ -112,13 +177,19 @@ class PlayerController(
         _state.update { it.copy(volume = v) }
     }
 
-    fun toggleShuffle() = updateQueue { it.withShuffle(!it.shuffle) }
+    fun toggleShuffle() {
+        if (redirected(JamAction.LocalOnly)) return
+        updateQueue { it.withShuffle(!it.shuffle) }
+    }
 
-    fun cycleRepeat() = updateQueue {
+    fun setRepeat(mode: Repeat) = updateQueue { it.withRepeat(mode) }
+
+    fun cycleRepeat() = if (redirected(JamAction.LocalOnly)) Unit else updateQueue {
         it.withRepeat(when (it.repeat) { Repeat.Off -> Repeat.All; Repeat.All -> Repeat.One; Repeat.One -> Repeat.Off })
     }
 
     fun addToQueue(tracks: List<Track>) {
+        if (redirected(JamAction.AddToQueue(tracks))) return
         val wasEmpty = _state.value.queue.isEmpty
         updateQueue { it.addLast(tracks) }
         if (wasEmpty) _state.value.current?.let { load(it, play = false) }
@@ -126,6 +197,7 @@ class PlayerController(
     }
 
     fun playNext(tracks: List<Track>) {
+        if (redirected(JamAction.PlayNext(tracks))) return
         val wasEmpty = _state.value.queue.isEmpty
         updateQueue { it.playNext(tracks) }
         if (wasEmpty) _state.value.current?.let { load(it, play = false) }
@@ -154,11 +226,14 @@ class PlayerController(
         }
     }
 
-    fun moveInQueue(from: Int, to: Int) = updateQueue { it.move(from, to) }
+    fun moveInQueue(from: Int, to: Int) = if (redirected(JamAction.LocalOnly)) Unit else updateQueue { it.move(from, to) }
 
-    fun clearUpcoming() = updateQueue { it.clearUpcoming() }
+    fun clearUpcoming() = if (redirected(JamAction.LocalOnly)) Unit else updateQueue { it.clearUpcoming() }
 
     fun dismissNotice() = _state.update { it.copy(notice = null) }
+
+    /** Shows a short message to the user (the same place playback notices appear). */
+    fun notify(message: String) = notice(message)
 
     private fun advance(auto: Boolean) {
         val q = _state.value.queue

@@ -41,7 +41,19 @@ class MainViewModel @Inject constructor(
     private val library: LibraryRepository,
     player: PlayerConnection,
     private val together: TogetherController,
+    private val link: com.aura.music.link.LinkController,
 ) : AndroidViewModel(application) {
+
+    init {
+        // Reconnects to paired computers while the app runs (no-op when none is paired).
+        link.start()
+    }
+
+    /** The linked computer that last controlled this phone, so it never happens unnoticed. */
+    val controlledBy: StateFlow<String?> = link.state
+        .map { it.controlledBy }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** Null until settings are read; the splash screen stays up meanwhile. */
     val appState: StateFlow<AppUiState?> = settings.settings

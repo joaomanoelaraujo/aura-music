@@ -24,6 +24,12 @@ object AppPaths {
     val settings: Path get() = root.resolve("settings.json")
     val library: Path get() = root.resolve("library.json")
     val artwork: Path get() = root.resolve("artwork")
+
+    /** Default folder for songs downloaded in Discover. */
+    val defaultDownloadFolder: Path get() = Path.of(System.getProperty("user.home"), "Music", "AURA Downloads")
+
+    /** Default folder for songs received from a linked phone. */
+    val defaultReceiveFolder: Path get() = Path.of(System.getProperty("user.home"), "Music", "AURA Recebidas")
 }
 
 @Serializable
@@ -32,6 +38,24 @@ data class Settings(
     /** App volume, 0..1 (not the system volume). */
     val volume: Float = 0.8f,
     val queuePanelOpen: Boolean = true,
+    /** Which tab the side panel shows: "queue" or "lyrics". */
+    val sidePanel: String = "queue",
+    /**
+     * Look up missing lyrics on LRCLIB. Off until the user turns it on: it sends the song's title,
+     * artist, album and duration to an outside service.
+     */
+    val onlineLyrics: Boolean = false,
+    /** Reopen the last queue (paused) when the app starts. */
+    val resumeSession: Boolean = true,
+    /** Rank equally good search results by what the user plays and favourites (computed locally). */
+    val personalizeSearch: Boolean = true,
+    val windowWidth: Int = 1280,
+    val windowHeight: Int = 820,
+    val windowMaximized: Boolean = false,
+    /** Where songs received from linked devices are saved (part of the library). Null: the default. */
+    val receiveFolder: String? = null,
+    /** Where Discover downloads are saved (part of the library). Null: the default. */
+    val downloadFolder: String? = null,
 )
 
 @Serializable

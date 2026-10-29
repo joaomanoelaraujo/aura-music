@@ -148,6 +148,14 @@ private fun TrackActionsSheet(
                 navigator.openArtist(track.artistId)
             })
         }
+        val sendTargets by viewModel.sendTargets.collectAsStateWithLifecycle()
+        sendTargets.forEach { (deviceId, name) ->
+            SheetAction(AuraIcons.Download, stringResource(R.string.link_send_to, name), onClick = {
+                viewModel.sendTo(deviceId, track)
+                messenger.show(resources.getString(R.string.link_send_started))
+                onDismiss()
+            })
+        }
         SheetAction(AuraIcons.Info, stringResource(R.string.action_details), onClick = { onNext(ActiveSheet.Details(track)) })
         if (track.uri.isNotEmpty()) {
             if (track.kind != AudioKind.Music) {

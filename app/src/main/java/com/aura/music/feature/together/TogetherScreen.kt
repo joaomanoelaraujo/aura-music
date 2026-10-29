@@ -235,8 +235,18 @@ private fun SessionContent(
                     })
                 }
                 item { ConnectionLine(isHost, hosting, guest) }
-                if (isHost && hosting != null) item { InviteActions(hosting.link) }
+                if (isHost && hosting != null) item { InviteActions(hosting.link, onRevoke = viewModel::revokeInvites) }
                 if (guest != null && guest.ui.status != GuestStatus.Connected) item { GuestStatusCard(guest) }
+                if (guest != null) item {
+                    val metered by viewModel.metered.collectAsStateWithLifecycle()
+                    if (metered) {
+                        Text(
+                            stringResource(R.string.together_metered),
+                            style = AuraTheme.type.bodySmall, color = AuraTheme.colors.textSecondary,
+                            modifier = Modifier.padding(horizontal = Spacing.gutter, vertical = Spacing.x2),
+                        )
+                    }
+                }
 
                 if (state != null && state.current != null) {
                     item {
@@ -392,7 +402,7 @@ private fun ConnectionLine(isHost: Boolean, hosting: TogetherRole.Hosting?, gues
 }
 
 @Composable
-private fun InviteActions(link: String) {
+private fun InviteActions(link: String, onRevoke: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val messenger = LocalMessenger.current
@@ -411,6 +421,11 @@ private fun InviteActions(link: String) {
             }
         }, style = ButtonStyle.Secondary)
     }
+    // Old links stop working; whoever is already in the jam stays.
+    AuraButton(stringResource(R.string.together_revoke_invites), onClick = {
+        onRevoke()
+        messenger.show(resources.getString(R.string.together_invites_revoked))
+    }, Modifier.padding(horizontal = Spacing.gutter), style = ButtonStyle.Secondary)
 }
 
 @Composable
@@ -425,6 +440,7 @@ private fun GuestStatusCard(guest: TogetherRole.Guest) {
                 RejectReason.Full -> R.string.together_end_full
                 RejectReason.Kicked -> R.string.together_end_kicked
                 RejectReason.BadVersion -> R.string.together_end_version
+                RejectReason.InviteRevoked -> R.string.together_end_revoked
                 else -> R.string.together_end_generic
             },
         )

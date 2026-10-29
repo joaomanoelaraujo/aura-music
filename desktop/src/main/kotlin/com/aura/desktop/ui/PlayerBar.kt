@@ -62,13 +62,26 @@ fun PlayerBar(model: AppModel) {
     ) {
         // Now playing
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Cover(track, model.artwork, 56.dp, 10.dp, sizePx = 140)
+            Cover(
+                track, model.artwork, 56.dp, 10.dp, sizePx = 140,
+                modifier = Modifier.clickable(enabled = track != null) {
+                    if (model.screen == Screen.NowPlaying) model.back() else model.open(Screen.NowPlaying)
+                }.pointerHoverIcon(PointerIcon.Hand),
+            )
             Column(Modifier.padding(start = 14.dp, end = 12.dp)) {
+                model.link?.let { link ->
+                    val controller = link.state.collectAsState().value.controlledBy
+                    if (controller != null) Text("Controlado por: $controller", style = AuraType.label, color = c.accent, maxLines = 1)
+                }
                 Text(track?.title ?: "Nada tocando", style = AuraType.bodyStrong, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     track?.let { listOfNotNull(it.artist ?: "Artista desconhecido", it.album).joinToString(" · ") } ?: "Escolha uma música para começar",
                     style = AuraType.small, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
+            }
+            if (track != null) {
+                val favorite = model.userData.value.collectAsState().value.favorites.contains(track.uri)
+                AuraIconButton(if (favorite) AuraIcons.HeartFilled else AuraIcons.Heart, if (favorite) "Remover das favoritas" else "Favoritar", { model.toggleFavorite(track) }, active = favorite, iconSize = 18.dp)
             }
         }
 
@@ -105,7 +118,8 @@ fun PlayerBar(model: AppModel) {
         // Volume and queue
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             val settings by model.settings.settings.collectAsState()
-            AuraIconButton(AuraIcons.Queue, if (settings.queuePanelOpen) "Esconder fila" else "Mostrar fila", model::toggleQueue, active = settings.queuePanelOpen)
+            AuraIconButton(AuraIcons.Lyrics, "Letra", { model.toggleSidePanel("lyrics") }, active = settings.queuePanelOpen && settings.sidePanel == "lyrics")
+            AuraIconButton(AuraIcons.Queue, "Fila", { model.toggleSidePanel("queue") }, active = settings.queuePanelOpen && settings.sidePanel == "queue")
             Box(Modifier.width(8.dp))
             Icon(AuraIcons.Wave, null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
             ScrubBar(
@@ -137,17 +151,40 @@ private fun PlayButton(playing: Boolean, enabled: Boolean, onClick: () -> Unit) 
     }
 }
 
-/** The queue beside the content: what's playing, what's next, and controls to edit it. */
+/** The side panel: the queue, or the lyrics of what's playing. */
 @Composable
-fun QueuePanel(model: AppModel, modifier: Modifier = Modifier) {
+fun SidePanel(model: AppModel, tab: String) {
+    val c = Aura.colors
+    val state by model.player.state.collectAsState()
+    Column(Modifier.fillMaxHeight().width(340.dp).background(c.surface.copy(alpha = 0.55f))) {
+        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            PanelTab("Fila", tab == "queue") { model.settings.update { it.copy(sidePanel = "queue") } }
+            PanelTab("Letra", tab == "lyrics") { model.settings.update { it.copy(sidePanel = "lyrics") } }
+            Box(Modifier.weight(1f))
+            if (tab == "queue" && state.queue.upcoming.isNotEmpty()) AuraIconButton(AuraIcons.Trash, "Limpar as próximas", model.player::clearUpcoming, iconSize = 18.dp)
+            if (tab == "lyrics" && state.current != null) AuraIconButton(AuraIcons.Expand, "Abrir em tela grande", { model.open(Screen.NowPlaying) }, iconSize = 18.dp)
+        }
+        if (tab == "lyrics") LyricsView(model, state.current, large = false) else QueueList(model)
+    }
+}
+
+@Composable
+private fun PanelTab(label: String, selected: Boolean, onClick: () -> Unit) {
+    val c = Aura.colors
+    Text(
+        label,
+        style = AuraType.title.copy(fontSize = androidx.compose.ui.unit.TextUnit(26f, androidx.compose.ui.unit.TextUnitType.Sp)),
+        color = if (selected) c.textPrimary else c.textTertiary,
+        modifier = Modifier.padding(end = 16.dp).clickable(onClick = onClick).pointerHoverIcon(PointerIcon.Hand),
+    )
+}
+
+@Composable
+private fun QueueList(model: AppModel) {
     val c = Aura.colors
     val state by model.player.state.collectAsState()
     val queue = state.queue
-    Column(modifier.fillMaxHeight().width(320.dp).background(c.surface.copy(alpha = 0.55f))) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 10.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Fila", style = AuraType.title, color = c.textPrimary, modifier = Modifier.weight(1f))
-            if (queue.upcoming.isNotEmpty()) AuraIconButton(AuraIcons.Trash, "Limpar as próximas", model.player::clearUpcoming, iconSize = 18.dp)
-        }
+    Column(Modifier.fillMaxSize()) {
         if (queue.isEmpty) {
             Text(
                 "A fila está vazia. Dê dois cliques numa música, ou use “Adicionar à fila” no menu do botão direito.",

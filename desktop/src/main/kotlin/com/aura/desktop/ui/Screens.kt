@@ -98,11 +98,19 @@ private fun SongColumns(showAlbum: Boolean) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SongRow(model: AppModel, track: Track, number: Int, playing: Boolean, showAlbum: Boolean, onPlay: () -> Unit) {
+fun SongRow(
+    model: AppModel,
+    track: Track,
+    number: Int,
+    playing: Boolean,
+    showAlbum: Boolean,
+    onPlay: () -> Unit,
+    extraMenu: List<ContextMenuItem> = emptyList(),
+) {
     val c = Aura.colors
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    ContextMenuArea(items = { songMenu(model, track, onPlay) }) {
+    ContextMenuArea(items = { songMenu(model, track, onPlay, extraMenu) }) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -134,12 +142,23 @@ fun SongRow(model: AppModel, track: Track, number: Int, playing: Boolean, showAl
     }
 }
 
-private fun songMenu(model: AppModel, track: Track, onPlay: () -> Unit) = listOf(
+private fun songMenu(model: AppModel, track: Track, onPlay: () -> Unit, extra: List<ContextMenuItem>) = listOf(
     ContextMenuItem("Tocar", onPlay),
     ContextMenuItem("Tocar a seguir") { model.player.playNext(listOf(track)) },
     ContextMenuItem("Adicionar à fila") { model.player.addToQueue(listOf(track)) },
+    ContextMenuItem("Adicionar à playlist…") { model.dialog = Dialog.AddToPlaylist(listOf(track)) },
+    ContextMenuItem(if (model.isFavorite(track)) "Remover das favoritas" else "Favoritar") { model.toggleFavorite(track) },
+) + extra + sendTargets(model).map { (id, name) ->
+    ContextMenuItem("Enviar para $name") { model.link?.sendFiles(id, listOf(track)) }
+} + listOf(
     ContextMenuItem("Abrir pasta do arquivo") { model.showInFolder(track) },
 )
+
+/** Connected devices that accept files: (deviceId, name). */
+fun sendTargets(model: AppModel): List<Pair<String, String>> =
+    model.link?.state?.value?.peers.orEmpty()
+        .filter { it.connected && com.aura.music.link.LinkCapabilities.FILES in it.capabilities }
+        .map { it.device.deviceId to it.device.name }
 
 @Composable
 fun AlbumGrid(model: AppModel, albums: List<Album>) {
@@ -274,6 +293,10 @@ private fun CollectionHeader(
                     model.player.playTracks(tracks, tracks.indices.random())
                 }, AuraIcons.Shuffle, primary = false)
                 PillButton("Adicionar à fila", { model.player.addToQueue(tracks) }, AuraIcons.AddToQueue, primary = false)
+                AuraIconButton(AuraIcons.Playlist, "Adicionar tudo a uma playlist", { model.dialog = Dialog.AddToPlaylist(tracks) })
+                sendTargets(model).forEach { (id, name) ->
+                    AuraIconButton(AuraIcons.Download, "Enviar tudo para $name", { model.link?.sendFiles(id, tracks) })
+                }
             }
         }
     }
@@ -360,7 +383,7 @@ fun SearchResults(model: AppModel, results: SmartResults) {
         if (tracks.isNotEmpty()) {
             item(key = "songs-title") { Text("MÚSICAS", style = AuraType.label, color = c.textTertiary, modifier = Modifier.padding(bottom = 6.dp)) }
             itemsIndexed(tracks, key = { _, t -> "s:${t.id}" }) { i, t ->
-                SongRow(model, t, i + 1, t.id == model.player.state.value.current?.id, showAlbum = true) { model.player.playTracks(tracks, i) }
+                SongRow(model, t, i + 1, t.id == model.player.state.value.current?.id, showAlbum = true, onPlay = { model.player.playTracks(tracks, i) })
             }
         }
     }
