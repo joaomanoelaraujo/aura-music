@@ -150,3 +150,24 @@ gesto de troca de faixa, progresso estimado dos widgets e retomada de sessão.
   atualizado em eventos e a cada 30 s, não continuamente.
 - No Android 10–11 os widgets não exibem o brilho atmosférico (não há recorte arredondado de
   camadas nessas versões); fundo, capa e controles são iguais.
+
+## Versão de release
+
+`./gradlew :app:assembleRelease` assina o APK com a chave de release se ela estiver configurada
+**fora do repositório**, em `local.properties` (que o Git ignora) ou em variáveis de ambiente:
+
+```properties
+# Ou as variáveis AURA_SIGNING_STORE_FILE, AURA_SIGNING_STORE_PASSWORD e AURA_SIGNING_KEY_ALIAS
+aura.signing.storeFile=C\:/caminho/para/aura-release.jks
+aura.signing.storePassword=sua-senha
+aura.signing.keyAlias=aura
+```
+
+Sem isso, o release sai sem assinatura. A versão de release usa o id `com.aura.music`; a de debug
+(e a `staging`) usa `com.aura.music.debug`, então as duas convivem no aparelho com dados separados.
+
+## Licença e privacidade
+
+Código sob a [Apache License 2.0](LICENSE); avisos de terceiros em [NOTICE](NOTICE). O nome e o
+logo AURA não estão incluídos na licença. O que o app envia para fora do aparelho, e quando, está
+na [política de privacidade](PRIVACY.md).

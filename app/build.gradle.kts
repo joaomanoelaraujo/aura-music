@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -29,8 +31,27 @@ android {
         manifestPlaceholders["invitePath"] = invitePath
     }
 
+    // Release key: read from local.properties or environment variables, never from the repository.
+    // Without it, release builds come out unsigned (staging/debug don't need it).
+    val signing = Properties().apply {
+        rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
+    fun signingValue(key: String, env: String): String? = signing.getProperty(key) ?: System.getenv(env)
+    val releaseStore = signingValue("aura.signing.storeFile", "AURA_SIGNING_STORE_FILE")
+    signingConfigs {
+        if (releaseStore != null) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = signingValue("aura.signing.storePassword", "AURA_SIGNING_STORE_PASSWORD")
+                keyAlias = signingValue("aura.signing.keyAlias", "AURA_SIGNING_KEY_ALIAS") ?: "aura"
+                keyPassword = signingValue("aura.signing.keyPassword", "AURA_SIGNING_KEY_PASSWORD") ?: storePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

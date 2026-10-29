@@ -147,10 +147,30 @@ private fun MainScaffold(viewModel: MainViewModel, miniPlayerStyle: MiniPlayerSt
                     )
                     if (hasMedia) AuraDarkSurface { PlayerSheet(sheetState, bottomBarHeight) }
                     TogetherDialogs(viewModel, onJoined = navigator::openTogether)
+                    OnlineConsentDialog(viewModel)
                 }
             }
         }
     }
+}
+
+/**
+ * Asked once: lyrics (LRCLIB) and covers (MusicBrainz) send song and album names to those
+ * services, so nothing is looked up until the user allows it. Both can be changed in Settings.
+ */
+@Composable
+private fun OnlineConsentDialog(viewModel: MainViewModel) {
+    val ask by viewModel.askOnlineConsent.collectAsStateWithLifecycle()
+    if (!ask) return
+    InviteDialog(
+        title = stringResource(R.string.online_consent_title),
+        message = stringResource(R.string.online_consent_body),
+        confirm = stringResource(R.string.online_consent_allow),
+        dismiss = stringResource(R.string.online_consent_deny),
+        onConfirm = { viewModel.answerOnlineConsent(true) },
+        onDismiss = { viewModel.answerOnlineConsent(false) },
+        icon = com.aura.music.core.designsystem.icons.AuraIcons.Search,
+    )
 }
 
 /** The guest's "accept invite?" dialog and the host's "let them in?" dialog, shown over any screen. */
@@ -188,12 +208,20 @@ private fun TogetherDialogs(viewModel: MainViewModel, onJoined: () -> Unit) {
 }
 
 @Composable
-private fun InviteDialog(title: String, message: String, confirm: String?, dismiss: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+private fun InviteDialog(
+    title: String,
+    message: String,
+    confirm: String?,
+    dismiss: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector = com.aura.music.core.designsystem.icons.AuraIcons.Together,
+) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = AuraTheme.colors.surfaceElevated,
         shape = com.aura.music.core.designsystem.theme.Radius.xLarge,
-        icon = { androidx.compose.material3.Icon(com.aura.music.core.designsystem.icons.AuraIcons.Together, null, tint = AuraTheme.colors.accent) },
+        icon = { androidx.compose.material3.Icon(icon, null, tint = AuraTheme.colors.accent) },
         title = { androidx.compose.material3.Text(title, style = AuraTheme.type.headline, color = AuraTheme.colors.textPrimary) },
         text = { androidx.compose.material3.Text(message, style = AuraTheme.type.body, color = AuraTheme.colors.textSecondary) },
         confirmButton = { if (confirm != null) com.aura.music.core.designsystem.components.AuraButton(confirm, onConfirm) },

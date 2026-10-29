@@ -69,7 +69,7 @@
     <string name="onboarding_point_atmosphere_title">Atmosfera adaptativa</string>
     <string name="onboarding_point_atmosphere_body">As cores do player se ajustam suavemente à capa de cada álbum.</string>
     <string name="onboarding_point_privacy_title">Privado por design</string>
-    <string name="onboarding_point_privacy_body">Sem conta e sem rastreamento: suas músicas só saem do celular se você as tocar numa jam do AURA Together, e um computador seu só vê a biblioteca se você o vincular e permitir. Só pedimos acesso aos seus arquivos de áudio.</string>
+    <string name="onboarding_point_privacy_body">Sem conta e sem rastreamento: suas músicas só saem do celular se você as tocar numa jam do AURA Together ou enviar a um computador seu, e um computador só vê a biblioteca se você o vincular e permitir. Letras e capas só são buscadas na internet se você permitir.</string>
     <string name="onboarding_grant">Permitir acesso às músicas</string>
     <string name="onboarding_open_settings">Abrir configurações do sistema</string>
     <string name="onboarding_denied">Sem essa permissão o AURA não consegue encontrar suas músicas. Você pode concedê-la nas configurações do sistema.</string>
@@ -331,6 +331,10 @@
     <string name="lyrics_unsynced_note">Letra sem marcação de tempo</string>
     <string name="lyrics_source_custom">Letra editada por você</string>
     <string name="lyrics_source_file">Arquivo .lrc</string>
+    <string name="online_consent_title">Buscar letras e capas na internet?</string>
+    <string name="online_consent_body">Para músicas sem letra e álbuns sem capa, o AURA pode procurar no LRCLIB (letras) e no MusicBrainz (capas). Para isso, envia o título, o artista, o álbum e a duração da música a esses serviços. Nada mais sai do aparelho. Você pode mudar isso a qualquer momento em Configurações.</string>
+    <string name="online_consent_allow">Permitir</string>
+    <string name="online_consent_deny">Agora não</string>
     <string name="settings_lyrics_online">Buscar letras na internet</string>
     <string name="settings_lyrics_online_body">Quando uma música não tem letra, o AURA procura uma letra sincronizada no LRCLIB e a guarda na música, para funcionar offline. Só são enviados o título, o artista, o álbum e a duração, e só com internet.</string>
     <string name="recap_title">Retrospectiva</string>

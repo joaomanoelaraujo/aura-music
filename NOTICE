@@ -1,0 +1,17 @@
+AURA
+Copyright 2026 joaomanoelaraujo (https://github.com/joaomanoelaraujo)
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The name "AURA" and its logo identify this project. The license covers the code; it does not
+grant permission to use the name or logo for other apps (Apache License 2.0, section 6).
+
+This product includes third-party software under their own licenses, among them:
+- FFmpeg (LGPL 2.1 or later), via org.bytedeco:ffmpeg, in AURA Desktop. AURA uses the LGPL build
+  and links to it dynamically; the FFmpeg source is available at https://ffmpeg.org.
+- Jetpack / AndroidX, Media3, Compose Multiplatform, Kotlin, OkHttp, Coil, Hilt, Room (Apache 2.0).
+- Bouncy Castle (MIT-style Bouncy Castle License).
+- ZXing (Apache 2.0), JmDNS (Apache 2.0), JNA (Apache 2.0 / LGPL 2.1).
+- Manrope, Instrument Serif and Inter fonts (SIL Open Font License 1.1).
+Lyrics come from LRCLIB and covers from MusicBrainz / Cover Art Archive at runtime; their data
+is not part of this repository.

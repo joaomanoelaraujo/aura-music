@@ -232,6 +232,10 @@ Pacote:
   os arquivos.
 - A janela do app empacotado abriu com a barra de título escura (captura de tela).
 
+APK de release (R8 ligado, assinado com a chave de release), no emulador: primeira abertura pede
+consentimento para letras/capas online (“Agora não” não pergunta de novo); vínculo por código com
+o PC (SPAKE2 e confirmação), estado do celular chegando ao PC e o celular pausando o PC.
+
 **Não testado:** celular físico; som audível com alguém ouvindo; teclas de mídia num teclado real
 (registro feito, tecla não pressionada); bibliotecas grandes; DPI diferente de 100 %; outros
 computadores e redes (Wi-Fi com isolamento de clientes bloqueia o AURA Link); macOS/Linux.

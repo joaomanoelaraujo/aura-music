@@ -117,6 +117,16 @@ class MainViewModel @Inject constructor(
         _openPlayerPending.value = false
     }
 
+    /** True until the user answers whether lyrics and covers may be looked up online. */
+    val askOnlineConsent: StateFlow<Boolean> = settings.settings
+        .map { it.onboardingCompleted && !it.onlineConsentAsked }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun answerOnlineConsent(allow: Boolean) {
+        viewModelScope.launch { settings.answerOnlineConsent(allow) }
+    }
+
     fun completeOnboarding(granted: Boolean) {
         viewModelScope.launch {
             settings.setOnboardingCompleted()

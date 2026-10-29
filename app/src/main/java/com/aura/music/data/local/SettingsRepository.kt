@@ -73,11 +73,16 @@ data class AppSettings(
     val showUntagged: Boolean = true,
     val lyricsFolders: Set<String> = emptySet(),
     /** Look for lyrics on the internet (LRCLIB) when a song has none, and keep them for offline use. */
-    val onlineLyrics: Boolean = true,
+    val onlineLyrics: Boolean = false,
     /** Lyric lines react to the music: glow on calm parts, pulse and shake on strong ones. */
     val lyricsEffects: Boolean = true,
     /** Look for covers online (MusicBrainz) for albums that have none. */
-    val onlineCovers: Boolean = true,
+    val onlineCovers: Boolean = false,
+    /**
+     * Whether the user already answered "look for lyrics and covers online?". Both lookups send
+     * song names to outside services, so they stay off until the user says yes.
+     */
+    val onlineConsentAsked: Boolean = false,
     val trackSort: SortSpec<TrackSort> = SortSpec(TrackSort.Title, ascending = true),
     val albumSort: SortSpec<AlbumSort> = SortSpec(AlbumSort.Title, ascending = true),
     val artistSort: SortSpec<ArtistSort> = SortSpec(ArtistSort.Name, ascending = true),
@@ -157,6 +162,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setOnlineLyrics(value: Boolean) = store.edit { it[Keys.ONLINE_LYRICS] = value }
     suspend fun setLyricsEffects(value: Boolean) = store.edit { it[Keys.LYRICS_EFFECTS] = value }
     suspend fun setOnlineCovers(value: Boolean) = store.edit { it[Keys.ONLINE_COVERS] = value }
+
+    suspend fun answerOnlineConsent(allow: Boolean) = store.edit {
+        it[Keys.ONLINE_LYRICS] = allow
+        it[Keys.ONLINE_COVERS] = allow
+        it[Keys.ONLINE_CONSENT] = true
+    }
     suspend fun setTrackSort(spec: SortSpec<TrackSort>) = store.edit { it[Keys.TRACK_SORT] = spec.encode() }
     suspend fun setAlbumSort(spec: SortSpec<AlbumSort>) = store.edit { it[Keys.ALBUM_SORT] = spec.encode() }
     suspend fun setArtistSort(spec: SortSpec<ArtistSort>) = store.edit { it[Keys.ARTIST_SORT] = spec.encode() }
@@ -214,6 +225,7 @@ class SettingsRepository @Inject constructor(
             onlineLyrics = this[Keys.ONLINE_LYRICS] ?: d.onlineLyrics,
             lyricsEffects = this[Keys.LYRICS_EFFECTS] ?: d.lyricsEffects,
             onlineCovers = this[Keys.ONLINE_COVERS] ?: d.onlineCovers,
+            onlineConsentAsked = this[Keys.ONLINE_CONSENT] ?: d.onlineConsentAsked,
             trackSort = decode(this[Keys.TRACK_SORT], d.trackSort),
             albumSort = decode(this[Keys.ALBUM_SORT], d.albumSort),
             artistSort = decode(this[Keys.ARTIST_SORT], d.artistSort),
@@ -264,6 +276,7 @@ class SettingsRepository @Inject constructor(
         val ONLINE_LYRICS = booleanPreferencesKey("online_lyrics")
         val LYRICS_EFFECTS = booleanPreferencesKey("lyrics_effects")
         val ONLINE_COVERS = booleanPreferencesKey("online_covers")
+        val ONLINE_CONSENT = booleanPreferencesKey("online_consent_asked")
         val TRACK_SORT = stringPreferencesKey("track_sort")
         val ALBUM_SORT = stringPreferencesKey("album_sort")
         val ARTIST_SORT = stringPreferencesKey("artist_sort")
